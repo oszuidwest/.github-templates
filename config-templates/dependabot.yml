@@ -1,0 +1,69 @@
+---
+# Dependabot Configuration
+# Source: oszuidwest/.github-templates
+#
+# Copy to: .github/dependabot.yml
+#
+# Customize by uncommenting the ecosystems relevant to your project.
+# All updates are scheduled for Monday to avoid weekend surprises.
+
+version: 2
+updates:
+  # GitHub Actions - Always include this
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # Docker - Include if you have a Dockerfile
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+
+  # ============================================================================
+  # LANGUAGE-SPECIFIC ECOSYSTEMS
+  # Uncomment the sections relevant to your project
+  # ============================================================================
+
+  # Go modules
+  # - package-ecosystem: "gomod"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+  #   groups:
+  #     all-dependencies:
+  #       patterns:
+  #         - "*"
+
+  # Node.js / npm
+  # - package-ecosystem: "npm"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+  #   groups:
+  #     all-dependencies:
+  #       patterns:
+  #         - "*"
+
+  # Python / pip
+  # - package-ecosystem: "pip"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+
+  # Rust / Cargo
+  # - package-ecosystem: "cargo"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+  #   groups:
+  #     all-dependencies:
+  #       patterns:
+  #         - "*"
