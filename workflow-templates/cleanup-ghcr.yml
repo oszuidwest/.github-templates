@@ -10,26 +10,26 @@
 # Customization:
 #   - SINGLE PACKAGE: Use the simple version (default)
 #   - MULTIPLE PACKAGES: Uncomment the matrix version and list your packages
-#
-# The workflow uses the repository name by default, which works for most repos.
 
 name: Cleanup Container Registry
 
 on:
   schedule:
-    # Weekly cleanup on Sunday at 3 AM UTC
+    # Weekly on Sunday at 3 AM UTC
     - cron: '0 3 * * 0'
   workflow_dispatch:
 
-# ============================================================================
-# OPTION 1: Single Package (Default)
-# Use this if your repo produces a single container image
-# ============================================================================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# === OPTION 1: Single Package (Default) ===
 
 jobs:
   cleanup:
     name: Delete Untagged Images
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     permissions:
       contents: read
@@ -39,22 +39,20 @@ jobs:
       - name: Delete Untagged Versions
         uses: actions/delete-package-versions@v5
         with:
-          # Uses repository name dynamically - no hardcoding needed
           package-name: ${{ github.event.repository.name }}
           package-type: 'container'
           delete-only-untagged-versions: 'true'
           min-versions-to-keep: 0
+        continue-on-error: true
 
-# ============================================================================
-# OPTION 2: Multiple Packages (Matrix Strategy)
-# Uncomment this section if your repo produces multiple container images
-# Delete the OPTION 1 section above when using this
-# ============================================================================
+# === OPTION 2: Multiple Packages (Matrix Strategy) ===
+# Uncomment and delete OPTION 1 above when using this
 
 # jobs:
 #   cleanup:
 #     name: Delete Untagged Images
 #     runs-on: ubuntu-latest
+#     timeout-minutes: 10
 #
 #     permissions:
 #       contents: read
@@ -76,3 +74,4 @@ jobs:
 #           package-type: 'container'
 #           delete-only-untagged-versions: 'true'
 #           min-versions-to-keep: 0
+#         continue-on-error: true

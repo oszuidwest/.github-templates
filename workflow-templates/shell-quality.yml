@@ -21,6 +21,11 @@ on:
     paths:
       - '**.sh'
   workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -29,6 +34,7 @@ jobs:
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout Repository
@@ -39,5 +45,4 @@ jobs:
         with:
           check_together: "yes"
           severity: warning
-          # Optional: specify specific directories to scan
           # scandir: './scripts'

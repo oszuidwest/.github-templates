@@ -37,7 +37,7 @@ Security scanning voor container images.
 | Check | Tool | Beschrijving |
 |-------|------|--------------|
 | Vulnerabilities | Trivy | CVE scanning (CRITICAL/HIGH) |
-| Best Practices | Dockle | Container security audit |
+| Secrets | Trivy | Hardcoded secrets detection |
 | SARIF Upload | CodeQL | GitHub Security tab integratie |
 
 **Triggers:** push naar main, pull requests, wekelijks (zondag 4:00 UTC), handmatig
@@ -111,8 +111,8 @@ Gebruik consistente versies in alle workflows:
 | actions/checkout | @v6 |
 | docker/setup-buildx-action | @v3 |
 | docker/build-push-action | @v6 |
-| aquasecurity/trivy-action | @0.28.0 |
-| hadolint/hadolint-action | @v3.1.0 |
+| aquasecurity/trivy-action | @0.33.0 |
+| hadolint/hadolint-action | @v3.3.0 |
 | github/codeql-action/upload-sarif | @v4 |
 
 ### Permissions
