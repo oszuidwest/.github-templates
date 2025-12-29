@@ -71,7 +71,7 @@ jobs:
               truthy:
                 allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
               document-start:
-                present: false
+                present: true
 
       - name: Check for Docker Compose
         id: check_compose
