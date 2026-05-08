@@ -81,7 +81,7 @@ jobs:
       packages: write  # Required even with enable-docker: false (see below).
 ```
 
-Inputs: `project-name`, `ldflags-target`, `build-matrix` (JSON), `main-package` (default `.` — set to `./cmd/foo` for repos with a non-root main), `version` (forward `inputs.version` from the consumer's `workflow_dispatch`; leave empty for tag pushes), `image-labels` (multiline), `enable-docker` (default `false`).
+Inputs: `project-name`, `ldflags-target`, `build-matrix` (JSON), `main-package` (default `.` — set to `./cmd/foo` for repos with a non-root main), `version` (forward `inputs.version` from the consumer's `workflow_dispatch`; leave empty for tag pushes), `image-labels` (multiline), `enable-docker` (default `false`), `release-body` (optional markdown prepended to auto-generated release notes — handy for Docker pull commands or install instructions).
 
 **Permissions caveat:** the caller must always declare `packages: write` even when `enable-docker: false`. GitHub validates nested reusable-workflow permissions at workflow-parse time, so the conditional `docker` job's permission requirement applies regardless of whether `if:` evaluates true. Symptom if missed: `Invalid workflow file ... The nested job 'docker' is requesting 'packages: write', but is only allowed 'packages: none'`.
 
