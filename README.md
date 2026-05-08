@@ -78,10 +78,12 @@ jobs:
         org.opencontainers.image.licenses=MIT
     permissions:
       contents: write
-      packages: write
+      packages: write  # Required even with enable-docker: false (see below).
 ```
 
 Inputs: `project-name`, `ldflags-target`, `build-matrix` (JSON), `main-package` (default `.` — set to `./cmd/foo` for repos with a non-root main), `version` (forward `inputs.version` from the consumer's `workflow_dispatch`; leave empty for tag pushes), `image-labels` (multiline), `enable-docker` (default `false`).
+
+**Permissions caveat:** the caller must always declare `packages: write` even when `enable-docker: false`. GitHub validates nested reusable-workflow permissions at workflow-parse time, so the conditional `docker` job's permission requirement applies regardless of whether `if:` evaluates true. Symptom if missed: `Invalid workflow file ... The nested job 'docker' is requesting 'packages: write', but is only allowed 'packages: none'`.
 
 **LDFLAGS contract:** the workflow injects PascalCase symbols `Version`, `Commit`, `BuildTime` at the package path you pass in `ldflags-target`. The Go package must declare those exact identifiers (e.g. `var Version, Commit, BuildTime string`). Lowercase names (`version`, `buildTime`) are not patched.
 
@@ -121,3 +123,4 @@ Inputs: `version` (required, must be non-empty and not `edge` — the workflow r
 | Compose warning about env vars | Expected behavior, no action needed |
 | Shell workflow doesn't run | Only triggers on `.sh` changes |
 | Reusable workflow can't see secrets | `workflow_call` only forwards `GITHUB_TOKEN`; declare other secrets explicitly |
+| `go-release.yml` rejects with "nested job 'docker' is requesting 'packages: write'" | Caller must declare `packages: write` even when `enable-docker: false` (parse-time validation) |

@@ -13,6 +13,10 @@
 # - GitHub Release with prerelease auto-detect via contains(version, '-').
 # - Edge artifact: <project>-edge-<sha>, no Docker push for edge.
 # - Optional Docker publish for releases via docker-publish.yml.
+#
+# Caller permissions: contents: write AND packages: write are required, even
+# when enable-docker is false. GitHub validates nested reusable-workflow
+# permissions at parse time, regardless of the docker job's `if:` condition.
 
 name: Go Release
 
