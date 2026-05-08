@@ -3,10 +3,13 @@
 # Source: oszuidwest/.github-templates
 #
 # Mirrors the audiologger release standard:
-# - Tag push or workflow_dispatch with `edge` or `vX.Y.Z` (or `X.Y.Z`, auto-prefixed).
+# - Tag push or workflow_call with `version: edge` or `vX.Y.Z` (or `X.Y.Z`).
 # - Tag re-run guard so workflow_dispatch can be re-run on existing tags.
+#   When a tag already exists, that tag is checked out so the build matches
+#   the tag (no asset/image divergence between release.yml and docker-publish.yml).
 # - Race-detected tests with shuffle.
-# - Build matrix from JSON input, ldflags inject Version/Commit/BuildTime.
+# - Tests run BEFORE tag creation (fail-fast on a manual dispatch).
+# - Build matrix from JSON input, ldflags inject PascalCase Version/Commit/BuildTime.
 # - GitHub Release with prerelease auto-detect via contains(version, '-').
 # - Edge artifact: <project>-edge-<sha>, no Docker push for edge.
 # - Optional Docker publish for releases via docker-publish.yml.
@@ -21,13 +24,26 @@ on:
         type: string
         required: true
       ldflags-target:
-        description: 'Go package path where Version/Commit/BuildTime are injected (e.g. "main" or "github.com/org/repo/pkg/version").'
+        description: >-
+          Go package path where PascalCase Version/Commit/BuildTime are injected
+          (e.g. "main" or "github.com/org/repo/pkg/version"). Symbols MUST be
+          PascalCase: Version, Commit, BuildTime.
         type: string
         required: true
       build-matrix:
         description: 'JSON array of build targets, e.g. [{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm","arm":"7"}].'
         type: string
         required: true
+      main-package:
+        description: 'Go main package path passed to `go build` (default: ".").'
+        type: string
+        default: '.'
+      version:
+        description: >-
+          Release version when triggered via a consumer workflow_dispatch.
+          Accepts "edge", "vX.Y.Z", or "X.Y.Z". Leave empty for tag pushes.
+        type: string
+        default: ''
       enable-docker:
         description: 'Trigger docker-publish.yml for releases (not for edge).'
         type: boolean
@@ -67,12 +83,17 @@ jobs:
       - name: Determine version
         id: version
         env:
-          INPUT_VERSION: ${{ github.event.inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_call" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -z "$INPUT_VERSION" ]; then
+              echo "::error::version input is required when invoked via workflow_call/workflow_dispatch."
+              exit 1
+            fi
             if [ "$INPUT_VERSION" = "edge" ]; then
-              echo "version=edge" >> "$GITHUB_OUTPUT"
+              SHORT_SHA=$(git rev-parse --short HEAD)
+              echo "version=edge-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
               echo "is_release=false" >> "$GITHUB_OUTPUT"
             else
               # Auto-prefix v if user typed "1.2.3" instead of "v1.2.3"
@@ -102,6 +123,23 @@ jobs:
           go fmt ./...
           git diff --exit-code
 
+      - name: Create or check out version tag (manual release)
+        if: github.event_name != 'push' && steps.version.outputs.is_release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "Tag $VERSION already exists; checking it out so the build matches the tag."
+          else
+            git tag "$VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
+          # Always end on the tag commit so build artifacts and Docker image
+          # come from the same source as the version label.
+          git checkout "refs/tags/$VERSION"
+
       - name: Build binaries
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -109,12 +147,8 @@ jobs:
           PROJECT: ${{ inputs.project-name }}
           LDFLAGS_TARGET: ${{ inputs.ldflags-target }}
           BUILD_MATRIX: ${{ inputs.build-matrix }}
+          MAIN_PACKAGE: ${{ inputs.main-package }}
         run: |
-          # Edge builds embed the short SHA so artifacts are traceable to a commit.
-          if [ "$VERSION" = "edge" ]; then
-            VERSION="edge-$(git rev-parse --short HEAD)"
-          fi
-
           mkdir -p dist
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -132,22 +166,8 @@ jobs:
             env GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=0 go build \
               -ldflags="-s -w -X ${LDFLAGS_TARGET}.Version=${VERSION} -X ${LDFLAGS_TARGET}.Commit=${COMMIT} -X ${LDFLAGS_TARGET}.BuildTime=${BUILD_TIME}" \
               -o "dist/${output_name}" \
-              .
+              "${MAIN_PACKAGE}"
           done
-
-      - name: Create git tag (manual release)
-        if: github.event_name == 'workflow_dispatch' && steps.version.outputs.is_release == 'true'
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
-            echo "Tag $VERSION already exists; reusing it for the release."
-          else
-            git tag "$VERSION"
-            git push origin "refs/tags/$VERSION"
-          fi
 
       - name: Create GitHub Release
         if: steps.version.outputs.is_release == 'true'

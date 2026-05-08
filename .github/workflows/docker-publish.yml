@@ -47,6 +47,15 @@ jobs:
       packages: write
 
     steps:
+      - name: Validate version input
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$VERSION" ] || [ "$VERSION" = "edge" ]; then
+            echo "::error::docker-publish.yml does not accept empty or 'edge' versions (Phase 0: edge is artifacts-only)."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
@@ -58,7 +67,9 @@ jobs:
       # source matches the version label.
       - name: Check out version tag (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
-        run: git checkout "${{ inputs.version }}"
+        env:
+          VERSION: ${{ inputs.version }}
+        run: git checkout "$VERSION"
 
       - name: Compute build time
         id: build_time
