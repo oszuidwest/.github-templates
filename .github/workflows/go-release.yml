@@ -64,6 +64,13 @@ on:
         description: 'Docker platforms passed through to docker-publish.yml.'
         type: string
         default: 'linux/amd64,linux/arm64'
+      release-body:
+        description: >-
+          Optional release-notes prefix prepended to auto-generated notes.
+          Supports markdown. Use for Docker pull commands, install instructions,
+          etc. When empty, only auto-generated notes are used.
+        type: string
+        default: ''
 
 jobs:
   release:
@@ -179,6 +186,9 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.version }}
           files: dist/*
+          # When body is non-empty, softprops/action-gh-release prepends it to
+          # the auto-generated notes. Empty body falls through to auto-only.
+          body: ${{ inputs.release-body }}
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
