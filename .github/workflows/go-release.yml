@@ -1,0 +1,203 @@
+---
+# Reusable Go release workflow
+# Source: oszuidwest/.github-templates
+#
+# Mirrors the audiologger release standard:
+# - Tag push or workflow_call with `version: edge` or `vX.Y.Z` (or `X.Y.Z`).
+# - Tag re-run guard so workflow_dispatch can be re-run on existing tags.
+#   When a tag already exists, that tag is checked out so the build matches
+#   the tag (no asset/image divergence between release.yml and docker-publish.yml).
+# - Race-detected tests with shuffle.
+# - Tests run BEFORE tag creation (fail-fast on a manual dispatch).
+# - Build matrix from JSON input, ldflags inject PascalCase Version/Commit/BuildTime.
+# - GitHub Release with prerelease auto-detect via contains(version, '-').
+# - Edge artifact: <project>-edge-<sha>, no Docker push for edge.
+# - Optional Docker publish for releases via docker-publish.yml.
+
+name: Go Release
+
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Project name. Used as edge artifact prefix and binary basename.'
+        type: string
+        required: true
+      ldflags-target:
+        description: >-
+          Go package path where PascalCase Version/Commit/BuildTime are injected
+          (e.g. "main" or "github.com/org/repo/pkg/version"). Symbols MUST be
+          PascalCase: Version, Commit, BuildTime.
+        type: string
+        required: true
+      build-matrix:
+        description: 'JSON array of build targets, e.g. [{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm","arm":"7"}].'
+        type: string
+        required: true
+      main-package:
+        description: 'Go main package path passed to `go build` (default: ".").'
+        type: string
+        default: '.'
+      version:
+        description: >-
+          Release version when triggered via a consumer workflow_dispatch.
+          Accepts "edge", "vX.Y.Z", or "X.Y.Z". Leave empty for tag pushes.
+        type: string
+        default: ''
+      enable-docker:
+        description: 'Trigger docker-publish.yml for releases (not for edge).'
+        type: boolean
+        default: false
+      image-labels:
+        description: 'Multiline image labels passed through to docker-publish.yml.'
+        type: string
+        default: ''
+      dockerfile-path:
+        description: 'Dockerfile path passed through to docker-publish.yml.'
+        type: string
+        default: 'Dockerfile'
+      platforms:
+        description: 'Docker platforms passed through to docker-publish.yml.'
+        type: string
+        default: 'linux/amd64,linux/arm64'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_release: ${{ steps.version.outputs.is_release }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Determine version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_call" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -z "$INPUT_VERSION" ]; then
+              echo "::error::version input is required when invoked via workflow_call/workflow_dispatch."
+              exit 1
+            fi
+            if [ "$INPUT_VERSION" = "edge" ]; then
+              SHORT_SHA=$(git rev-parse --short HEAD)
+              echo "version=edge-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+              echo "is_release=false" >> "$GITHUB_OUTPUT"
+            else
+              # Auto-prefix v if user typed "1.2.3" instead of "v1.2.3"
+              case "$INPUT_VERSION" in
+                v*) VERSION="$INPUT_VERSION" ;;
+                *)  VERSION="v$INPUT_VERSION" ;;
+              esac
+              echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+              echo "is_release=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -race -shuffle=on -v ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          go fmt ./...
+          git diff --exit-code
+
+      - name: Create or check out version tag (manual release)
+        if: github.event_name != 'push' && steps.version.outputs.is_release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "Tag $VERSION already exists; checking it out so the build matches the tag."
+          else
+            git tag "$VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
+          # Always end on the tag commit so build artifacts and Docker image
+          # come from the same source as the version label.
+          git checkout "refs/tags/$VERSION"
+
+      - name: Build binaries
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ github.sha }}
+          PROJECT: ${{ inputs.project-name }}
+          LDFLAGS_TARGET: ${{ inputs.ldflags-target }}
+          BUILD_MATRIX: ${{ inputs.build-matrix }}
+          MAIN_PACKAGE: ${{ inputs.main-package }}
+        run: |
+          mkdir -p dist
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          echo "$BUILD_MATRIX" | jq -c '.[]' | while read -r entry; do
+            GOOS=$(echo "$entry" | jq -r '.os')
+            GOARCH=$(echo "$entry" | jq -r '.arch')
+            GOARM=$(echo "$entry" | jq -r '.arm // empty')
+
+            output_name="${PROJECT}-${VERSION}-${GOOS}-${GOARCH}"
+            [ -n "$GOARM" ] && output_name="${output_name}v${GOARM}"
+            [ "$GOOS" = "windows" ] && output_name="${output_name}.exe"
+
+            echo "Building $output_name"
+
+            env GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=0 go build \
+              -ldflags="-s -w -X ${LDFLAGS_TARGET}.Version=${VERSION} -X ${LDFLAGS_TARGET}.Commit=${COMMIT} -X ${LDFLAGS_TARGET}.BuildTime=${BUILD_TIME}" \
+              -o "dist/${output_name}" \
+              "${MAIN_PACKAGE}"
+          done
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.is_release == 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload edge artifacts
+        if: steps.version.outputs.is_release == 'false'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.project-name }}-edge-${{ github.sha }}
+          path: dist/*
+          retention-days: 7
+
+  docker:
+    needs: release
+    if: inputs.enable-docker && needs.release.outputs.is_release == 'true' && needs.release.result == 'success'
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      dockerfile-path: ${{ inputs.dockerfile-path }}
+      platforms: ${{ inputs.platforms }}
+      image-labels: ${{ inputs.image-labels }}
+    permissions:
+      contents: read
+      packages: write
