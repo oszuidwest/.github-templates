@@ -45,9 +45,9 @@ jobs:
         id: check_dockerfile
         run: |
           if [ -f "${{ env.DOCKERFILE_PATH }}" ]; then
-            echo "has_dockerfile=true" >> $GITHUB_OUTPUT
+            echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_dockerfile=false" >> $GITHUB_OUTPUT
+            echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"
           fi
 
       # Configuration in .hadolint.yaml - do NOT duplicate ignore rules here
@@ -83,9 +83,9 @@ jobs:
             fi
           done
           if [ -n "$COMPOSE_FILES" ]; then
-            echo "has_compose=true" >> $GITHUB_OUTPUT
+            echo "has_compose=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_compose=false" >> $GITHUB_OUTPUT
+            echo "has_compose=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Docker Compose Validation
