@@ -154,13 +154,17 @@ jobs:
       - name: Build binaries
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          COMMIT: ${{ github.sha }}
           PROJECT: ${{ inputs.project-name }}
           LDFLAGS_TARGET: ${{ inputs.ldflags-target }}
           BUILD_MATRIX: ${{ inputs.build-matrix }}
           MAIN_PACKAGE: ${{ inputs.main-package }}
         run: |
           mkdir -p dist
+          # Resolve COMMIT from HEAD, not github.sha. After a manual re-run on
+          # an existing tag the previous step checks out the tag commit; the
+          # workflow-level github.sha still points at the dispatch-commit and
+          # would yield a binary whose embedded commit doesn't match the tag.
+          COMMIT=$(git rev-parse HEAD)
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
           echo "$BUILD_MATRIX" | jq -c '.[]' | while read -r entry; do
