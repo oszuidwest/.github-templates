@@ -140,6 +140,44 @@ Inputs:
 | `platforms` | string | no | `linux/amd64,linux/arm64` | Comma-separated Docker buildx platforms. |
 | `image-labels` | string | no | `''` | Multiline OCI labels passed to metadata/build. |
 
+### Composing custom pre-release gates
+
+Some consumers need project-specific work to run before the release pipeline — integration tests against a database, smoke tests, contract verification, slow security scans. Don't add these as inputs to `go-release.yml`; every flag is permanent API surface that all consumers carry. Compose them in the consumer's release workflow instead:
+
+```yaml
+name: Release
+on:
+  push: { tags: ['v*'] }
+  workflow_dispatch:
+    inputs:
+      version: { description: 'Version to build', required: true, default: 'edge' }
+
+permissions:
+  contents: read
+
+jobs:
+  pre-release:
+    uses: ./.github/workflows/integration-test.yml
+
+  release:
+    needs: pre-release
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v1
+    with:
+      project-name: my-app
+      ldflags-target: github.com/oszuidwest/my-app/internal/version
+      build-matrix: '[{"os":"linux","arch":"amd64"}]'
+      version: ${{ inputs.version }}
+    permissions:
+      contents: write
+      packages: write
+```
+
+The `pre-release` job can be anything — another `uses:`, an inline matrix, a single step. `needs:` chains it before the reusable release.
+
+**Cost:** `go-release.yml` runs its own `go test -race -shuffle=on` regardless of what your gate did. That's ~30s of overlap. Accept it — the alternative (a `skip_tests` input on the template) grows the API surface with every consumer's quirk and trains future consumers to skip safety checks.
+
+**When not to use this:** if a gate should also run on PRs, put it in CI (`go-ci.yml` composition) and trust main at release time. Release-time gates only earn their keep for tag-only concerns: version-string sanity, release-asset shape, etc. Re-running the same unit tests on every release adds latency without catching bugs that PR CI didn't already catch.
+
 ## Maintenance contract
 
 - **Versioning:** semver. Patch for compatible bug fixes and documentation clarifications, minor for additive optional inputs, major for breaking changes (renamed/removed inputs, permission model changes, or default changes that break consumers). Both an immutable `v1.x.y` and a moving `v1` tag exist; consumers pin to `@v1` to follow fixes, `@v1.x.y` to freeze.
