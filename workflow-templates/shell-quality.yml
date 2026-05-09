@@ -12,7 +12,7 @@
 
 name: Shell Quality
 
-on:
+'on':
   push:
     branches: [main]
     paths:

@@ -23,47 +23,47 @@ updates:
       interval: "weekly"
       day: "monday"
 
-  # ============================================================================
-  # LANGUAGE-SPECIFIC ECOSYSTEMS
-  # Uncomment the sections relevant to your project
-  # ============================================================================
+# ============================================================================
+# LANGUAGE-SPECIFIC ECOSYSTEMS
+# Uncomment the sections relevant to your project
+# ============================================================================
 
-  # Go modules
-  # - package-ecosystem: "gomod"
-  #   directory: "/"
-  #   schedule:
-  #     interval: "weekly"
-  #     day: "monday"
-  #   groups:
-  #     all-dependencies:
-  #       patterns:
-  #         - "*"
+# Go modules
+# - package-ecosystem: "gomod"
+#   directory: "/"
+#   schedule:
+#     interval: "weekly"
+#     day: "monday"
+#   groups:
+#     all-dependencies:
+#       patterns:
+#         - "*"
 
-  # Node.js / npm
-  # - package-ecosystem: "npm"
-  #   directory: "/"
-  #   schedule:
-  #     interval: "weekly"
-  #     day: "monday"
-  #   groups:
-  #     all-dependencies:
-  #       patterns:
-  #         - "*"
+# Node.js / npm
+# - package-ecosystem: "npm"
+#   directory: "/"
+#   schedule:
+#     interval: "weekly"
+#     day: "monday"
+#   groups:
+#     all-dependencies:
+#       patterns:
+#         - "*"
 
-  # Python / pip
-  # - package-ecosystem: "pip"
-  #   directory: "/"
-  #   schedule:
-  #     interval: "weekly"
-  #     day: "monday"
+# Python / pip
+# - package-ecosystem: "pip"
+#   directory: "/"
+#   schedule:
+#     interval: "weekly"
+#     day: "monday"
 
-  # Rust / Cargo
-  # - package-ecosystem: "cargo"
-  #   directory: "/"
-  #   schedule:
-  #     interval: "weekly"
-  #     day: "monday"
-  #   groups:
-  #     all-dependencies:
-  #       patterns:
-  #         - "*"
+# Rust / Cargo
+# - package-ecosystem: "cargo"
+#   directory: "/"
+#   schedule:
+#     interval: "weekly"
+#     day: "monday"
+#   groups:
+#     all-dependencies:
+#       patterns:
+#         - "*"
