@@ -113,14 +113,18 @@ Inputs:
 
 ### `docker-publish.yml` — reusable Docker build/push
 
-Called transitively by `go-release.yml` when `enable-docker: true`. Direct call only when a repo has its own release flow:
+Called transitively by `go-release.yml` when `enable-docker: true`. Direct call only when a repo has its own release flow. Trigger from a tag push so `github.ref_name` resolves to the tag — empty values and `edge` are rejected by the workflow:
 
 ```yaml
+name: Publish Docker
+on:
+  push: { tags: ['v*'] }
+permissions: { contents: read }
 jobs:
   publish:
     uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v1
     with:
-      version: ${{ github.ref_name }}  # only call from a tag push or after tagging
+      version: ${{ github.ref_name }}
     permissions:
       contents: read
       packages: write
