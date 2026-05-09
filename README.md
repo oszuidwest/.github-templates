@@ -140,6 +140,40 @@ Inputs:
 | `platforms` | string | no | `linux/amd64,linux/arm64` | Comma-separated Docker buildx platforms. |
 | `image-labels` | string | no | `''` | Multiline OCI labels passed to metadata/build. |
 
+### Composing custom pre-release gates
+
+`go-release.yml` is build-and-ship only — it does not run tests, lint, or fmt. The assumption is that PR CI already gated the merge into main, so a tag on main is releasable by construction. This is the standard "trust main" model: don't repeat verification work in the release path.
+
+If a consumer needs an extra pre-release check that PR CI doesn't cover (integration tests against a live service, smoke tests, etc.), gate the release on it via `needs:` instead of asking the template to grow another input:
+
+```yaml
+name: Release
+on:
+  push: { tags: ['v*'] }
+  workflow_dispatch:
+    inputs:
+      version: { description: 'Version to build', required: true, default: 'edge' }
+permissions:
+  contents: read
+jobs:
+  pre-release:
+    uses: ./.github/workflows/integration-test.yml
+
+  release:
+    needs: pre-release
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v1
+    with:
+      project-name: my-service
+      ldflags-target: github.com/org/my-service/version
+      build-matrix: '[{"os":"linux","arch":"amd64"}]'
+      version: ${{ inputs.version }}
+    permissions:
+      contents: write
+      packages: write
+```
+
+The custom job lives in the consumer repo, the template stays small, and `needs:` short-circuits the release if the gate fails.
+
 ## Maintenance contract
 
 - **Versioning:** semver. Patch for compatible bug fixes and documentation clarifications, minor for additive optional inputs, major for breaking changes (renamed/removed inputs, permission model changes, or default changes that break consumers). Both an immutable `v1.x.y` and a moving `v1` tag exist; consumers pin to `@v1` to follow fixes, `@v1.x.y` to freeze.

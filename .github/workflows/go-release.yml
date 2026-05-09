@@ -2,13 +2,16 @@
 # Reusable Go release workflow
 # Source: oszuidwest/.github-templates
 #
-# Mirrors the audiologger release standard:
+# Trust-main release model: this workflow builds binaries from the tagged
+# commit and ships them. Verification (tests, lint, fmt) is the job of PR CI
+# on the way into main, not the release path. To gate a release on a custom
+# check (integration tests, smoke tests, etc.), compose via `needs:` from the
+# caller — see the README for the pattern.
+#
 # - Tag push or workflow_call with `version: edge` or `vX.Y.Z` (or `X.Y.Z`).
 # - Tag re-run guard so workflow_dispatch can be re-run on existing tags.
 #   When a tag already exists, that tag is checked out so the build matches
 #   the tag.
-# - Race-detected tests with shuffle.
-# - Tests run BEFORE tag creation (fail-fast on a manual dispatch).
 # - Build matrix from JSON input.
 # - Ldflags inject PascalCase Version/Commit/BuildTime.
 # - GitHub Release with prerelease auto-detect via contains(version, '-').
@@ -131,17 +134,6 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
-
-      - name: Run tests
-        run: go test -race -shuffle=on -v ./...
-
-      - name: Run go vet
-        run: go vet ./...
-
-      - name: Check formatting
-        run: |
-          go fmt ./...
-          git diff --exit-code
 
       - name: Create or check out version tag (manual release)
         if: >-
