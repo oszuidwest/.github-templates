@@ -75,6 +75,13 @@ jobs:
         id: build_time
         run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve commit SHA
+        id: commit
+        # Use HEAD, not github.sha. On workflow_dispatch the previous step
+        # checks out the version tag; github.sha still points at the
+        # dispatch-commit and would label the image with the wrong commit.
+        run: echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Resolve image name
         id: image
         env:
@@ -125,5 +132,5 @@ jobs:
           sbom: false
           build-args: |
             VERSION=${{ inputs.version }}
-            COMMIT=${{ github.sha }}
+            COMMIT=${{ steps.commit.outputs.value }}
             BUILD_TIME=${{ steps.build_time.outputs.value }}
