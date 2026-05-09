@@ -64,6 +64,8 @@ on:
   workflow_dispatch:
     inputs:
       version: { description: 'Version to build', required: true, default: 'edge' }
+permissions:
+  contents: read
 jobs:
   release:
     uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v1
@@ -83,7 +85,7 @@ jobs:
 
 Inputs: `project-name`, `ldflags-target`, `build-matrix` (JSON), `main-package` (default `.` — set to `./cmd/foo` for repos with a non-root main), `version` (forward `inputs.version` from the consumer's `workflow_dispatch`; leave empty for tag pushes), `image-labels` (multiline), `enable-docker` (default `false`), `release-body` (optional markdown prepended to auto-generated release notes — handy for Docker pull commands or install instructions).
 
-**Permissions caveat:** the caller must always declare `packages: write` even when `enable-docker: false`. GitHub validates nested reusable-workflow permissions at workflow-parse time, so the conditional `docker` job's permission requirement applies regardless of whether `if:` evaluates true. Symptom if missed: `Invalid workflow file ... The nested job 'docker' is requesting 'packages: write', but is only allowed 'packages: none'`.
+**Permissions caveat:** keep the caller workflow default at `contents: read`, then grant `contents: write` and `packages: write` only on the reusable release job. The caller job must always declare `packages: write` even when `enable-docker: false`. GitHub validates nested reusable-workflow permissions at workflow-parse time, so the conditional `docker` job's permission requirement applies regardless of whether `if:` evaluates true. Symptom if missed: `Invalid workflow file ... The nested job 'docker' is requesting 'packages: write', but is only allowed 'packages: none'`.
 
 **LDFLAGS contract:** the workflow injects PascalCase symbols `Version`, `Commit`, `BuildTime` at the package path you pass in `ldflags-target`. The Go package must declare those exact identifiers (e.g. `var Version, Commit, BuildTime string`). Lowercase names (`version`, `buildTime`) are not patched.
 

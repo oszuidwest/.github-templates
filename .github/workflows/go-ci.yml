@@ -10,7 +10,7 @@
 
 name: Go CI
 
-on:
+'on':
   workflow_call:
     inputs:
       golangci-lint-version:
@@ -26,7 +26,9 @@ on:
         type: boolean
         default: false
       frontend-tool:
-        description: 'Frontend tool to use when enable-frontend is true. Only "bun" is supported in v1.'
+        description: >-
+          Frontend tool to use when enable-frontend is true.
+          Only "bun" is supported in v1.
         type: string
         default: 'bun'
 
@@ -84,7 +86,7 @@ jobs:
       - name: Verify frontend tool
         if: inputs.frontend-tool != 'bun'
         run: |
-          echo "::error::frontend-tool '${{ inputs.frontend-tool }}' is not supported in v1. Only 'bun' is implemented."
+          echo "::error::Only frontend-tool 'bun' is supported in v1."
           exit 1
 
       - uses: oven-sh/setup-bun@v2

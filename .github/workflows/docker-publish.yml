@@ -12,7 +12,7 @@
 
 name: Docker Publish
 
-on:
+'on':
   workflow_call:
     inputs:
       version:
@@ -20,7 +20,9 @@ on:
         type: string
         required: true
       image-name:
-        description: 'Image name. Defaults to the calling repository (github.repository) when empty.'
+        description: >-
+          Image name. Defaults to the calling repository
+          (github.repository) when empty.
         type: string
         default: ''
       dockerfile-path:
@@ -52,7 +54,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           if [ -z "$VERSION" ] || [ "$VERSION" = "edge" ]; then
-            echo "::error::docker-publish.yml does not accept empty or 'edge' versions (Phase 0: edge is artifacts-only)."
+            echo "::error::docker-publish.yml requires a release version."
             exit 1
           fi
 
@@ -109,8 +111,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
-          # type=semver patterns extract from values starting with 'v' (e.g. v1.2.3 -> 1.2.3).
-          # Pre-release tags (v1.0.0-rc1) only emit {{version}}; latest/major/minor are skipped.
+          # type=semver patterns extract from v-prefixed versions.
+          # Pre-releases skip latest/major/minor tags.
           tags: |
             type=semver,pattern={{version}},value=${{ inputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }}

@@ -6,10 +6,11 @@
 # - Tag push or workflow_call with `version: edge` or `vX.Y.Z` (or `X.Y.Z`).
 # - Tag re-run guard so workflow_dispatch can be re-run on existing tags.
 #   When a tag already exists, that tag is checked out so the build matches
-#   the tag (no asset/image divergence between release.yml and docker-publish.yml).
+#   the tag.
 # - Race-detected tests with shuffle.
 # - Tests run BEFORE tag creation (fail-fast on a manual dispatch).
-# - Build matrix from JSON input, ldflags inject PascalCase Version/Commit/BuildTime.
+# - Build matrix from JSON input.
+# - Ldflags inject PascalCase Version/Commit/BuildTime.
 # - GitHub Release with prerelease auto-detect via contains(version, '-').
 # - Edge artifact: <project>-edge-<sha>, no Docker push for edge.
 # - Optional Docker publish for releases via docker-publish.yml.
@@ -20,11 +21,12 @@
 
 name: Go Release
 
-on:
+'on':
   workflow_call:
     inputs:
       project-name:
-        description: 'Project name. Used as edge artifact prefix and binary basename.'
+        description: >-
+          Project name. Used as edge artifact prefix and binary basename.
         type: string
         required: true
       ldflags-target:
@@ -35,7 +37,9 @@ on:
         type: string
         required: true
       build-matrix:
-        description: 'JSON array of build targets, e.g. [{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm","arm":"7"}].'
+        description: >-
+          JSON array of build targets, e.g.
+          [{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm"}].
         type: string
         required: true
       main-package:
@@ -53,7 +57,8 @@ on:
         type: boolean
         default: false
       image-labels:
-        description: 'Multiline image labels passed through to docker-publish.yml.'
+        description: >-
+          Multiline image labels passed through to docker-publish.yml.
         type: string
         default: ''
       dockerfile-path:
@@ -71,6 +76,9 @@ on:
           etc. When empty, only auto-generated notes are used.
         type: string
         default: ''
+
+permissions:
+  contents: read
 
 jobs:
   release:
@@ -97,9 +105,10 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_call" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_call" ] ||
+             [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ -z "$INPUT_VERSION" ]; then
-              echo "::error::version input is required when invoked via workflow_call/workflow_dispatch."
+              echo "::error::version input is required for manual calls."
               exit 1
             fi
             if [ "$INPUT_VERSION" = "edge" ]; then
@@ -135,14 +144,16 @@ jobs:
           git diff --exit-code
 
       - name: Create or check out version tag (manual release)
-        if: github.event_name != 'push' && steps.version.outputs.is_release == 'true'
+        if: >-
+          github.event_name != 'push' &&
+          steps.version.outputs.is_release == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
-            echo "Tag $VERSION already exists; checking it out so the build matches the tag."
+            echo "Tag $VERSION already exists; checking out that tag."
           else
             git tag "$VERSION"
             git push origin "refs/tags/$VERSION"
@@ -178,8 +189,14 @@ jobs:
 
             echo "Building $output_name"
 
-            env GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=0 go build \
-              -ldflags="-s -w -X ${LDFLAGS_TARGET}.Version=${VERSION} -X ${LDFLAGS_TARGET}.Commit=${COMMIT} -X ${LDFLAGS_TARGET}.BuildTime=${BUILD_TIME}" \
+            LDFLAGS="-s -w"
+            LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.Version=${VERSION}"
+            LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.Commit=${COMMIT}"
+            LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.BuildTime=${BUILD_TIME}"
+
+            env GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=0 \
+              go build \
+              -ldflags="$LDFLAGS" \
               -o "dist/${output_name}" \
               "${MAIN_PACKAGE}"
           done
@@ -209,7 +226,10 @@ jobs:
 
   docker:
     needs: release
-    if: inputs.enable-docker && needs.release.outputs.is_release == 'true' && needs.release.result == 'success'
+    if: >-
+      inputs.enable-docker &&
+      needs.release.outputs.is_release == 'true' &&
+      needs.release.result == 'success'
     uses: ./.github/workflows/docker-publish.yml
     with:
       version: ${{ needs.release.outputs.version }}
