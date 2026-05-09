@@ -34,7 +34,7 @@ env:
 
 **Adjust Hadolint rules?** Edit `.hadolint.yaml`, not the workflow.
 
-## Reusable workflows (Phase 2)
+## Reusable workflows
 
 Call from the consumer repo's own `.github/workflows/` files. Pinning to `@v1` follows template fixes automatically; pinning to `@v1.0.0` freezes.
 
@@ -53,7 +53,16 @@ jobs:
       golangci-lint-version: v2.12.1
 ```
 
-Inputs: `golangci-lint-version` (default `v2.12.1`), `go-version-file` (default `go.mod`), `enable-frontend` (default `false`), `frontend-tool` (default `bun`).
+Inputs:
+
+| Input | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `golangci-lint-version` | string | no | `v2.12.1` | Passed to `golangci/golangci-lint-action`. |
+| `go-version-file` | string | no | `go.mod` | Passed to `actions/setup-go`. |
+| `enable-frontend` | boolean | no | `false` | Adds the frontend lint job. |
+| `frontend-tool` | string | no | `bun` | Only `bun` is supported in v1. |
+
+The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, `govulncheck`, and `staticcheck`. Consumers must keep `deadcode`, `govulncheck`, and `staticcheck` available through Go tool directives in `go.mod`.
 
 ### `go-release.yml` — Go release
 
@@ -83,7 +92,20 @@ jobs:
       packages: write  # Required even with enable-docker: false (see below).
 ```
 
-Inputs: `project-name`, `ldflags-target`, `build-matrix` (JSON), `main-package` (default `.` — set to `./cmd/foo` for repos with a non-root main), `version` (forward `inputs.version` from the consumer's `workflow_dispatch`; leave empty for tag pushes), `image-labels` (multiline), `enable-docker` (default `false`), `release-body` (optional markdown prepended to auto-generated release notes — handy for Docker pull commands or install instructions).
+Inputs:
+
+| Input | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `project-name` | string | yes | n/a | Binary basename and edge artifact prefix. |
+| `ldflags-target` | string | yes | n/a | Package path containing `Version`, `Commit`, and `BuildTime`. |
+| `build-matrix` | string | yes | n/a | JSON array of `{os, arch, arm?}` build targets. |
+| `main-package` | string | no | `.` | Set to `./cmd/foo` for non-root commands. |
+| `version` | string | no | `''` | Forward the caller's `workflow_dispatch` input; leave empty for tag pushes. |
+| `enable-docker` | boolean | no | `false` | Calls `docker-publish.yml` for releases only, never edge. |
+| `image-labels` | string | no | `''` | Multiline OCI labels forwarded to Docker publish. |
+| `dockerfile-path` | string | no | `Dockerfile` | Forwarded to Docker publish when enabled. |
+| `platforms` | string | no | `linux/amd64,linux/arm64` | Comma-separated Docker platforms. |
+| `release-body` | string | no | `''` | Optional markdown prepended to generated release notes. |
 
 **Permissions caveat:** keep the caller workflow default at `contents: read`, then grant `contents: write` and `packages: write` only on the reusable release job. The caller job must always declare `packages: write` even when `enable-docker: false`. GitHub validates nested reusable-workflow permissions at workflow-parse time, so the conditional `docker` job's permission requirement applies regardless of whether `if:` evaluates true. Symptom if missed: `Invalid workflow file ... The nested job 'docker' is requesting 'packages: write', but is only allowed 'packages: none'`.
 
@@ -104,17 +126,44 @@ jobs:
       packages: write
 ```
 
-Inputs: `version` (required, must be non-empty and not `edge` — the workflow rejects edge per Phase 0), `image-name` (default `${{ github.repository }}`), `dockerfile-path` (default `Dockerfile`), `platforms` (default `linux/amd64,linux/arm64`), `image-labels`.
+Inputs:
+
+| Input | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `version` | string | yes | n/a | Release version. Empty and `edge` are rejected. |
+| `image-name` | string | no | `''` | Empty resolves to `${{ github.repository }}`. |
+| `dockerfile-path` | string | no | `Dockerfile` | Dockerfile path relative to repo root. |
+| `platforms` | string | no | `linux/amd64,linux/arm64` | Comma-separated Docker buildx platforms. |
+| `image-labels` | string | no | `''` | Multiline OCI labels passed to metadata/build. |
 
 ## Maintenance contract
 
-- **Versioning:** semver. Minor for additive optional inputs, major for breaking changes (renamed/removed inputs, default changes that break consumers). Both an immutable `v1.x.y` and a moving `v1` tag exist; consumers pin to `@v1` to follow fixes, `@v1.x.y` to freeze.
-- **Bumps:** dependabot via `github-actions` ecosystem in this repo + each consumer.
-- **Phase 0 standards** (locked in): action major-pinning, `golangci-lint` pinned, race detection required (`-race -shuffle=on`), `:edge` Docker tag NOT published (artifacts only), `BUILD_TIME` from `date -u`, `provenance: false` and `sbom: false` (opt-in only).
+- **Versioning:** semver. Patch for compatible bug fixes and documentation clarifications, minor for additive optional inputs, major for breaking changes (renamed/removed inputs, permission model changes, or default changes that break consumers). Both an immutable `v1.x.y` and a moving `v1` tag exist; consumers pin to `@v1` to follow fixes, `@v1.x.y` to freeze.
+- **Release tags:** after a validated merge to `main`, tag the exact merge commit and move the major tag:
+  ```bash
+  VERSION=v1.1.3
+  git fetch origin main --tags
+  git switch main
+  git pull --ff-only
+  git tag "$VERSION"
+  git tag -f v1 "$VERSION"
+  git push origin "$VERSION"
+  git push --force origin refs/tags/v1
+  ```
+- **Consumer bumps:** `@v1` consumers receive fixes when the moving tag is updated; monitor their next CI/release runs after each template release. Patch-pinned consumers (`@v1.x.y`) need a PR that changes the workflow ref and records the smoke test performed.
+- **Dependabot:** keep the `github-actions` ecosystem enabled in this repo and in consumers:
+  ```yaml
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule: { interval: "weekly", day: "monday" }
+  ```
+  Language ecosystems (`gomod`, `npm`, `pip`, `cargo`) remain consumer-specific. The template file keeps them commented so each repo opts into the ecosystems it actually uses.
+- **Phase 0 standards** (locked in): action major-pinning, `golangci-lint` pinned, race detection required (`-race -shuffle=on`), strict deadcode findings, `:edge` Docker tag NOT published (artifacts only), `BUILD_TIME` from `date -u`, `provenance: false` and `sbom: false` (opt-in only).
 - **Action-pinning exceptions:** major-pinning is the default. Some upstream actions don't publish a moving major tag — for those, pin to the most specific tag they publish:
   - `ludeeus/action-shellcheck` — patch tag (e.g. `@2.0.0`); upstream has no `@v2`/`@2`.
   - `aquasecurity/trivy-action` — release tag (e.g. `@0.36.0`); upstream uses `0.x.0` schema, no major tag.
 - **Drift before templating:** new copy-paste templates only after audiologger-style hand-alignment proves the shape on at least two consumers. Don't template a shape that hasn't stabilized.
+- **Known v2 candidate:** `go-release.yml` currently keeps `enable-docker` for v1 compatibility, but its nested Docker job forces `packages: write` on all callers at parse time. A future v2 may remove that shortcut and require Docker consumers to call `docker-publish.yml` directly.
 
 ## Troubleshooting
 
