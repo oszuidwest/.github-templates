@@ -1,5 +1,5 @@
 ---
-# Edge is artifacts-only — this workflow rejects empty/edge versions.
+# Edge is artifacts-only - this workflow rejects empty/edge versions.
 name: Docker Publish
 
 on:
