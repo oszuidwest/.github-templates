@@ -3,7 +3,7 @@
 Shared GitHub Actions for repositories at oszuidwest. Two delivery models:
 
 - **Copy-paste templates** (`workflow-templates/`, `config-templates/`) — drop-in files. Use for project-shaped pieces (Dockerfile linting, Trivy scan, shellcheck) where the consumer barely customizes.
-- **Reusable workflows** (`.github/workflows/`) — called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@v1`. Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
+- **Reusable workflows** (`.github/workflows/`) — called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@vX` (per-workflow major: `go-ci.yml@v1`, `go-release.yml@v2`, `docker-publish.yml@v1`). Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
 
 ## Copy-paste templates
 
@@ -36,7 +36,7 @@ env:
 
 ## Reusable workflows
 
-Call from the consumer repo's own `.github/workflows/` files. Pinning to `@v1` follows template fixes automatically; pinning to `@v1.0.0` freezes.
+Call from the consumer repo's own `.github/workflows/` files. Pinning to the moving major tag (`@v1`, `@v2`) follows template fixes automatically; pinning to a patch tag (`@v1.0.0`, `@v2.0.0`) freezes. Each reusable workflow has its own major line — see the per-workflow examples below for current versions.
 
 ### `go-ci.yml` — Go CI
 
@@ -77,19 +77,14 @@ permissions:
   contents: read
 jobs:
   release:
-    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v1
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v2
     with:
       project-name: zwfm-metadata
       ldflags-target: zwfm-metadata/utils
       build-matrix: '[{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm64"},{"os":"darwin","arch":"arm64"}]'
       version: ${{ inputs.version }}
-      enable-docker: true
-      image-labels: |
-        org.opencontainers.image.title=ZuidWest FM Metadata
-        org.opencontainers.image.licenses=MIT
     permissions:
       contents: write
-      packages: write  # Required even with enable-docker: false (see below).
 ```
 
 Inputs:
@@ -101,19 +96,52 @@ Inputs:
 | `build-matrix` | string | yes | n/a | JSON array of `{os, arch, arm?}` build targets. |
 | `main-package` | string | no | `.` | Set to `./cmd/foo` for non-root commands. |
 | `version` | string | no | `''` | Forward the caller's `workflow_dispatch` input; leave empty for tag pushes. |
-| `enable-docker` | boolean | no | `false` | Calls `docker-publish.yml` for releases only, never edge. |
-| `image-labels` | string | no | `''` | Multiline OCI labels forwarded to Docker publish. |
-| `dockerfile-path` | string | no | `Dockerfile` | Forwarded to Docker publish when enabled. |
-| `platforms` | string | no | `linux/amd64,linux/arm64` | Comma-separated Docker platforms. |
 | `release-body` | string | no | `''` | Optional markdown prepended to generated release notes. |
 
-**Permissions caveat:** keep the caller workflow default at `contents: read`, then grant `contents: write` and `packages: write` only on the reusable release job. The caller job must always declare `packages: write` even when `enable-docker: false`. GitHub validates nested reusable-workflow permissions at workflow-parse time, so the conditional `docker` job's permission requirement applies regardless of whether `if:` evaluates true. Symptom if missed: `Invalid workflow file ... The nested job 'docker' is requesting 'packages: write', but is only allowed 'packages: none'`.
+Outputs:
+
+| Output | Notes |
+|--------|-------|
+| `version` | Resolved release version. `vX.Y.Z` for tagged runs, `edge-<short-sha>` for edge. |
+| `is_release` | `'true'` for tagged releases (including prereleases), `'false'` for edge. Gate downstream Docker publish on this. |
 
 **LDFLAGS contract:** the workflow injects PascalCase symbols `Version`, `Commit`, `BuildTime` at the package path you pass in `ldflags-target`. The Go package must declare those exact identifiers (e.g. `var Version, Commit, BuildTime string`). Lowercase names (`version`, `buildTime`) are not patched.
 
+#### Releasing with a Docker image
+
+v2 dropped the nested docker job. Compose with `docker-publish.yml` from a second job in the caller workflow, gated on the release outputs:
+
+```yaml
+jobs:
+  release:
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v2
+    with:
+      project-name: zwfm-metadata
+      ldflags-target: zwfm-metadata/utils
+      build-matrix: '[{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm64"}]'
+      version: ${{ inputs.version }}
+    permissions:
+      contents: write
+
+  docker:
+    needs: release
+    if: needs.release.outputs.is_release == 'true'
+    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v1
+    with:
+      version: ${{ needs.release.outputs.version }}
+      image-labels: |
+        org.opencontainers.image.title=ZuidWest FM Metadata
+        org.opencontainers.image.licenses=MIT
+    permissions:
+      contents: read
+      packages: write
+```
+
+The `if:` skips Docker for edge runs; `needs.release.outputs.version` forwards the resolved tag (with `v` prefix) so `docker-publish.yml`'s semver patterns produce the expected `:1.2.3`, `:1.2`, `:1`, `:latest` tags. Each job declares only the permissions it needs — non-Docker callers stay at `contents: write` only.
+
 ### `docker-publish.yml` — reusable Docker build/push
 
-Called transitively by `go-release.yml` when `enable-docker: true`. Direct call only when a repo has its own release flow. Trigger from a tag push so `github.ref_name` resolves to the tag — empty values and `edge` are rejected by the workflow:
+Called from a release flow alongside `go-release.yml` (see "Releasing with a Docker image" above) or directly from a tag push when no Go binary is involved. `github.ref_name` resolves to the tag — empty values and `edge` are rejected by the workflow:
 
 ```yaml
 name: Publish Docker
@@ -161,7 +189,7 @@ jobs:
 
   release:
     needs: pre-release
-    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v1
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v2
     with:
       project-name: my-service
       ldflags-target: github.com/org/my-service/version
@@ -169,26 +197,27 @@ jobs:
       version: ${{ inputs.version }}
     permissions:
       contents: write
-      packages: write
 ```
 
 The custom job lives in the consumer repo, the template stays small, and `needs:` short-circuits the release if the gate fails.
 
 ## Maintenance contract
 
-- **Versioning:** semver. Patch for compatible bug fixes and documentation clarifications, minor for additive optional inputs, major for breaking changes (renamed/removed inputs, permission model changes, or default changes that break consumers). Both an immutable `v1.x.y` and a moving `v1` tag exist; consumers pin to `@v1` to follow fixes, `@v1.x.y` to freeze.
+- **Versioning:** semver. Patch for compatible bug fixes and documentation clarifications, minor for additive optional inputs, major for breaking changes (renamed/removed inputs, permission model changes, or default changes that break consumers). Each major line keeps an immutable `vX.Y.Z` and a moving `vX` tag; consumers pin to `@vX` to follow fixes, `@vX.Y.Z` to freeze.
+- **Active major lines:** `v1` (legacy — `go-release.yml` with nested `docker` job) and `v2` (current — composes with `docker-publish.yml` from a separate caller job). New consumers pin `@v2`; v1 stays available for already-pinned consumers until they migrate.
 - **Release tags:** after a validated merge to `main`, tag the exact merge commit and move the major tag:
   ```bash
-  VERSION=v1.1.3
+  VERSION=v2.0.1   # or v1.x.y for a v1-line patch
+  MAJOR=v2         # match VERSION's major
   git fetch origin main --tags
   git switch main
   git pull --ff-only
   git tag "$VERSION"
-  git tag -f v1 "$VERSION"
+  git tag -f "$MAJOR" "$VERSION"
   git push origin "$VERSION"
-  git push --force origin refs/tags/v1
+  git push --force origin "refs/tags/$MAJOR"
   ```
-- **Consumer bumps:** `@v1` consumers receive fixes when the moving tag is updated; monitor their next CI/release runs after each template release. Patch-pinned consumers (`@v1.x.y`) need a PR that changes the workflow ref and records the smoke test performed.
+- **Consumer bumps:** `@vX` consumers receive fixes when the moving tag is updated; monitor their next CI/release runs after each template release. Patch-pinned consumers (`@vX.Y.Z`) need a PR that changes the workflow ref and records the smoke test performed.
 - **Dependabot:** keep the `github-actions` ecosystem enabled in this repo and in consumers:
   ```yaml
   - package-ecosystem: "github-actions"
@@ -201,7 +230,22 @@ The custom job lives in the consumer repo, the template stays small, and `needs:
   - `ludeeus/action-shellcheck` — patch tag (e.g. `@2.0.0`); upstream has no `@v2`/`@2`.
   - `aquasecurity/trivy-action` — release tag (e.g. `@0.36.0`); upstream uses `0.x.0` schema, no major tag.
 - **Drift before templating:** new copy-paste templates only after audiologger-style hand-alignment proves the shape on at least two consumers. Don't template a shape that hasn't stabilized.
-- **Known v2 candidate:** `go-release.yml` currently keeps `enable-docker` for v1 compatibility, but its nested Docker job forces `packages: write` on all callers at parse time. A future v2 may remove that shortcut and require Docker consumers to call `docker-publish.yml` directly.
+
+### Migrating `go-release.yml` from v1 to v2
+
+v2 dropped the nested `docker` job and the four inputs that fed it (`enable-docker`, `image-labels`, `dockerfile-path`, `platforms`). Consumers that publish a Docker image now add a second job that calls `docker-publish.yml` directly.
+
+For a consumer currently calling `go-release.yml@v1` with `enable-docker: true`:
+
+1. Bump `@v1` → `@v2` on the release job.
+2. Drop `enable-docker`, `image-labels`, `dockerfile-path`, `platforms` from the release call.
+3. Drop `packages: write` from the release job's permissions (`contents: write` is enough now).
+4. Add a second job that calls `docker-publish.yml@v1` with `needs: release`, gated on `needs.release.outputs.is_release == 'true'`, and forwards `version` from the release outputs. See "Releasing with a Docker image" for the full snippet.
+
+For a consumer currently calling `go-release.yml@v1` with `enable-docker: false`:
+
+1. Bump `@v1` → `@v2`.
+2. Drop `packages: write` from the release job's permissions — the parse-time requirement is gone.
 
 ## Troubleshooting
 
@@ -212,4 +256,3 @@ The custom job lives in the consumer repo, the template stays small, and `needs:
 | Compose warning about env vars | Expected behavior, no action needed |
 | Shell workflow doesn't run | Only triggers on `.sh` changes |
 | Reusable workflow can't see secrets | `workflow_call` only forwards `GITHUB_TOKEN`; declare other secrets explicitly |
-| `go-release.yml` rejects with "nested job 'docker' is requesting 'packages: write'" | Caller must declare `packages: write` even when `enable-docker: false` (parse-time validation) |
