@@ -1,15 +1,5 @@
 ---
-# Reusable Docker publish workflow
-# Source: oszuidwest/.github-templates
-#
-# Mirrors the audiologger Docker standard:
-# - Builds for stable + prerelease tags. Edge is artifacts-only (Phase 0); this
-#   workflow does not emit `:edge` Docker tags.
-# - BUILD_TIME computed at run time (UTC ISO-8601).
-# - provenance: false, sbom: false (opt in via fork if needed).
-# - For workflow_dispatch with an existing version tag, checks out that tag so
-#   the image source matches the label.
-
+# Edge is artifacts-only — this workflow rejects empty/edge versions.
 name: Docker Publish
 
 on:
@@ -63,10 +53,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # When triggered by tag push, the chain is already at the tagged commit.
-      # When triggered by workflow_dispatch, the entry workflow ran on a branch
-      # and a tag was just created upstream — check that tag out so the image
-      # source matches the version label.
+      # workflow_dispatch starts on a branch; align with the tag commit.
       - name: Check out version tag (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -79,9 +66,7 @@ jobs:
 
       - name: Resolve commit SHA
         id: commit
-        # Use HEAD, not github.sha. On workflow_dispatch the previous step
-        # checks out the version tag; github.sha still points at the
-        # dispatch-commit and would label the image with the wrong commit.
+        # HEAD, not github.sha: previous step may have checked out the tag.
         run: echo "value=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve image name
@@ -111,8 +96,7 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
-          # type=semver patterns extract from v-prefixed versions.
-          # Pre-releases skip latest/major/minor tags.
+          # type=semver strips v-prefix; latest/major/minor skipped for prereleases.
           tags: |
             type=semver,pattern={{version}},value=${{ inputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }}

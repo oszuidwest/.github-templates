@@ -1,13 +1,4 @@
 ---
-# Reusable Go CI workflow
-# Source: oszuidwest/.github-templates
-#
-# Mirrors the audiologger CI standard: race-detected tests with shuffle, vet,
-# fmt drift check, pinned golangci-lint, deadcode, govulncheck, staticcheck.
-#
-# Optional `enable-frontend` flag adds a Bun lint job for repos that ship a
-# frontend alongside the Go service.
-
 name: Go CI
 
 on:
