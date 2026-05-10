@@ -16,11 +16,11 @@
 # - Ldflags inject PascalCase Version/Commit/BuildTime.
 # - GitHub Release with prerelease auto-detect via contains(version, '-').
 # - Edge artifact: <project>-edge-<sha>, no Docker push for edge.
-# - Optional Docker publish for releases via docker-publish.yml.
 #
-# Caller permissions: contents: write AND packages: write are required, even
-# when enable-docker is false. GitHub validates nested reusable-workflow
-# permissions at parse time, regardless of the docker job's `if:` condition.
+# v2 dropped the nested docker job. To publish a Docker image alongside a
+# release, the caller adds a second job that calls docker-publish.yml@v1
+# directly, gated on `needs.release.outputs.is_release == 'true'`. See the
+# README for the composition pattern.
 
 name: Go Release
 
@@ -55,23 +55,6 @@ on:
           Accepts "edge", "vX.Y.Z", or "X.Y.Z". Leave empty for tag pushes.
         type: string
         default: ''
-      enable-docker:
-        description: 'Trigger docker-publish.yml for releases (not for edge).'
-        type: boolean
-        default: false
-      image-labels:
-        description: >-
-          Multiline image labels passed through to docker-publish.yml.
-        type: string
-        default: ''
-      dockerfile-path:
-        description: 'Dockerfile path passed through to docker-publish.yml.'
-        type: string
-        default: 'Dockerfile'
-      platforms:
-        description: 'Docker platforms passed through to docker-publish.yml.'
-        type: string
-        default: 'linux/amd64,linux/arm64'
       release-body:
         description: >-
           Optional release-notes prefix prepended to auto-generated notes.
@@ -79,6 +62,19 @@ on:
           etc. When empty, only auto-generated notes are used.
         type: string
         default: ''
+    outputs:
+      version:
+        description: >-
+          Resolved release version. Tagged releases yield `vX.Y.Z`; edge runs
+          yield `edge-<short-sha>`. Forward to docker-publish.yml or other
+          downstream jobs.
+        value: ${{ jobs.release.outputs.version }}
+      is_release:
+        description: >-
+          `true` for tagged releases (including prereleases), `false` for edge
+          runs. Gate downstream Docker publish jobs on this so edge builds
+          stay artifacts-only.
+        value: ${{ jobs.release.outputs.is_release }}
 
 permissions:
   contents: read
@@ -108,8 +104,7 @@ jobs:
           INPUT_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_call" ] ||
-             [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ -z "$INPUT_VERSION" ]; then
               echo "::error::version input is required for manual calls."
               exit 1
@@ -150,8 +145,9 @@ jobs:
             git tag "$VERSION"
             git push origin "refs/tags/$VERSION"
           fi
-          # Always end on the tag commit so build artifacts and Docker image
-          # come from the same source as the version label.
+          # Always end on the tag commit so the embedded COMMIT ldflag matches
+          # the tag, and any downstream docker-publish job builds from the same
+          # source as the version label.
           git checkout "refs/tags/$VERSION"
 
       - name: Build binaries
@@ -215,19 +211,3 @@ jobs:
           name: ${{ inputs.project-name }}-edge-${{ github.sha }}
           path: dist/*
           retention-days: 7
-
-  docker:
-    needs: release
-    if: >-
-      inputs.enable-docker &&
-      needs.release.outputs.is_release == 'true' &&
-      needs.release.result == 'success'
-    uses: ./.github/workflows/docker-publish.yml
-    with:
-      version: ${{ needs.release.outputs.version }}
-      dockerfile-path: ${{ inputs.dockerfile-path }}
-      platforms: ${{ inputs.platforms }}
-      image-labels: ${{ inputs.image-labels }}
-    permissions:
-      contents: read
-      packages: write
