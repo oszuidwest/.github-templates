@@ -25,15 +25,15 @@ on:
       deadcode-version:
         description: 'golang.org/x/tools/cmd/deadcode version'
         type: string
-        default: 'v0.28.0'
+        default: 'v0.45.0'
       govulncheck-version:
         description: 'golang.org/x/vuln/cmd/govulncheck version'
         type: string
-        default: 'v1.1.4'
+        default: 'v1.3.0'
       staticcheck-version:
         description: 'honnef.co/go/tools/cmd/staticcheck version'
         type: string
-        default: '2024.1.1'
+        default: '2026.1'
 
 permissions:
   contents: read
