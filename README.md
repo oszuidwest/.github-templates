@@ -2,8 +2,8 @@
 
 Shared GitHub Actions for repositories at oszuidwest. Two delivery models:
 
-- **Copy-paste templates** (`workflow-templates/`, `config-templates/`) — drop-in files. Use for project-shaped pieces (Dockerfile linting, Trivy scan, shellcheck) where the consumer barely customizes.
-- **Reusable workflows** (`.github/workflows/`) — called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@v2`. Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
+- **Copy-paste templates** (`workflow-templates/`, `config-templates/`) - drop-in files. Use for project-shaped pieces (Dockerfile linting, Trivy scan, shellcheck) where the consumer barely customizes.
+- **Reusable workflows** (`.github/workflows/`) - called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@v2`. Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
 
 ## Copy-paste templates
 
@@ -38,7 +38,7 @@ env:
 
 Call from the consumer repo's own `.github/workflows/` files. Pinning to the moving major tag (`@v2`) follows template fixes automatically; pinning to a patch tag (`@v2.0.0`) freezes.
 
-### `go-ci.yml` — Go CI
+### `go-ci.yml` - Go CI
 
 ```yaml
 name: CI
@@ -64,7 +64,7 @@ Inputs:
 
 The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, `govulncheck`, and `staticcheck`. Consumers must keep `deadcode`, `govulncheck`, and `staticcheck` available through Go tool directives in `go.mod`.
 
-### `go-release.yml` — Go release
+### `go-release.yml` - Go release
 
 ```yaml
 name: Release
@@ -137,11 +137,11 @@ jobs:
       packages: write
 ```
 
-The `if:` skips Docker for edge runs; `needs.release.outputs.version` forwards the resolved tag (with `v` prefix) so `docker-publish.yml`'s semver patterns produce the expected `:1.2.3`, `:1.2`, `:1`, `:latest` tags. Each job declares only the permissions it needs — non-Docker callers stay at `contents: write` only.
+The `if:` skips Docker for edge runs; `needs.release.outputs.version` forwards the resolved tag (with `v` prefix) so `docker-publish.yml`'s semver patterns produce the expected `:1.2.3`, `:1.2`, `:1`, `:latest` tags. Each job declares only the permissions it needs - non-Docker callers stay at `contents: write` only.
 
-### `docker-publish.yml` — reusable Docker build/push
+### `docker-publish.yml` - reusable Docker build/push
 
-Called from a release flow alongside `go-release.yml` (see "Releasing with a Docker image" above) or directly from a tag push when no Go binary is involved. `github.ref_name` resolves to the tag — empty values and `edge` are rejected by the workflow:
+Called from a release flow alongside `go-release.yml` (see "Releasing with a Docker image" above) or directly from a tag push when no Go binary is involved. `github.ref_name` resolves to the tag - empty values and `edge` are rejected by the workflow:
 
 ```yaml
 name: Publish Docker
@@ -170,7 +170,7 @@ Inputs:
 
 ### Composing custom pre-release gates
 
-`go-release.yml` is build-and-ship only — it does not run tests, lint, or fmt. The assumption is that PR CI already gated the merge into main, so a tag on main is releasable by construction. This is the standard "trust main" model: don't repeat verification work in the release path.
+`go-release.yml` is build-and-ship only - it does not run tests, lint, or fmt. The assumption is that PR CI already gated the merge into main, so a tag on main is releasable by construction. This is the standard "trust main" model: don't repeat verification work in the release path.
 
 If a consumer needs an extra pre-release check that PR CI doesn't cover (integration tests against a live service, smoke tests, etc.), gate the release on it via `needs:` instead of asking the template to grow another input:
 
@@ -226,14 +226,14 @@ The custom job lives in the consumer repo, the template stays small, and `needs:
   ```
   Language ecosystems (`gomod`, `npm`, `pip`, `cargo`) remain consumer-specific. The template file keeps them commented so each repo opts into the ecosystems it actually uses.
 - **Phase 0 standards** (locked in): action major-pinning, `golangci-lint` pinned, race detection required (`-race -shuffle=on`), strict deadcode findings, `:edge` Docker tag NOT published (artifacts only), `BUILD_TIME` from `date -u`, `provenance: false` and `sbom: false` (opt-in only).
-- **Action-pinning exceptions:** major-pinning is the default. Some upstream actions don't publish a moving major tag — for those, pin to the most specific tag they publish:
-  - `ludeeus/action-shellcheck` — patch tag (e.g. `@2.0.0`); upstream has no `@v2`/`@2`.
-  - `aquasecurity/trivy-action` — release tag (e.g. `@0.36.0`); upstream uses `0.x.0` schema, no major tag.
+- **Action-pinning exceptions:** major-pinning is the default. Some upstream actions don't publish a moving major tag - for those, pin to the most specific tag they publish:
+  - `ludeeus/action-shellcheck` - patch tag (e.g. `@2.0.0`); upstream has no `@v2`/`@2`.
+  - `aquasecurity/trivy-action` - release tag (e.g. `@0.36.0`); upstream uses `0.x.0` schema, no major tag.
 - **Drift before templating:** new copy-paste templates only after audiologger-style hand-alignment proves the shape on at least two consumers. Don't template a shape that hasn't stabilized.
 
 ### Migrating `go-release.yml` from v1 to v2
 
-> **Note:** the `v1` tag was retired in 2026-05 — `go-release.yml@v1` no longer resolves. The steps below are kept as historical reference for anyone whose repo still carries v1 syntax. Replace `@v1` with `@v2` and follow the migration before pushing.
+> **Note:** the `v1` tag was retired in 2026-05 - `go-release.yml@v1` no longer resolves. The steps below are kept as historical reference for anyone whose repo still carries v1 syntax. Replace `@v1` with `@v2` and follow the migration before pushing.
 
 v2 dropped the nested `docker` job and the four inputs that fed it (`enable-docker`, `image-labels`, `dockerfile-path`, `platforms`). Consumers that publish a Docker image now add a second job that calls `docker-publish.yml` directly.
 
@@ -247,7 +247,7 @@ For a consumer currently calling `go-release.yml@v1` with `enable-docker: true`:
 For a consumer currently calling `go-release.yml@v1` with `enable-docker: false`:
 
 1. Bump `@v1` → `@v2`.
-2. Drop `packages: write` from the release job's permissions — the parse-time requirement is gone.
+2. Drop `packages: write` from the release job's permissions - the parse-time requirement is gone.
 
 ## Troubleshooting
 
