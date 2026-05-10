@@ -1,0 +1,196 @@
+---
+# Manual + version-bump release. Reads VERSION from <plugin-slug>.php header,
+# compares against latest git tag, tags + zips + publishes when bumped (or
+# forced). Translations are auto-compiled when languages/*.po exists.
+name: WP Release
+
+on:
+  workflow_call:
+    inputs:
+      plugin-slug:
+        description: >-
+          Plugin slug. Used as zip rootdir, zip filename, and expected main
+          PHP file name (<slug>.php in repo root). Defaults to the calling
+          repository name.
+        type: string
+        default: ''
+      force:
+        description: 'Release even if the version was not bumped.'
+        type: boolean
+        default: false
+    outputs:
+      version:
+        description: 'Version extracted from the plugin header.'
+        value: ${{ jobs.release.outputs.version }}
+      released:
+        description: '`true` when a GitHub release was created.'
+        value: ${{ jobs.release.outputs.released }}
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.decide.outputs.version }}
+      released: ${{ steps.decide.outputs.release_needed }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve plugin slug and main file
+        id: slug
+        env:
+          INPUT_SLUG: ${{ inputs.plugin-slug }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          SLUG="${INPUT_SLUG:-$REPO_NAME}"
+          MAIN_FILE="${SLUG}.php"
+          if [ ! -f "$MAIN_FILE" ]; then
+            echo "::error::Main plugin file '$MAIN_FILE' missing at repo root."
+            echo "::error::Set 'plugin-slug' if it differs from the repo name."
+            exit 1
+          fi
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+          echo "main_file=$MAIN_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Extract and validate version
+        id: version
+        env:
+          MAIN_FILE: ${{ steps.slug.outputs.main_file }}
+        run: |
+          VERSION=$(sed -n \
+            's/.*Version:[[:space:]]*\([0-9a-zA-Z.-]\+\).*/\1/p' \
+            "$MAIN_FILE" | head -1)
+          PRE='(-(alpha|beta|rc)\.[0-9]+)?'
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+${PRE}$ ]]; then
+            echo "::error::Invalid version in $MAIN_FILE: '$VERSION'."
+            echo "::error::Expected X.Y.Z or X.Y.Z-(alpha|beta|rc).N"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether to release
+        id: decide
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          LATEST_TAG=$(git describe --tags \
+            "$(git rev-list --tags --max-count=1)" 2>/dev/null || echo "")
+          version_gt() {
+            test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+          }
+          if [ "$FORCE" = "true" ]; then
+            DECISION=true
+            REASON="forced"
+          elif [ -z "$LATEST_TAG" ]; then
+            DECISION=true
+            REASON="first release"
+          elif version_gt "$VERSION" "$LATEST_TAG"; then
+            DECISION=true
+            REASON="version bumped from $LATEST_TAG to $VERSION"
+          else
+            DECISION=false
+            REASON="no bump (latest: $LATEST_TAG, header: $VERSION)"
+          fi
+          echo "Release decision: $DECISION ($REASON)"
+          echo "release_needed=$DECISION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Tag the new version
+        if: steps.decide.outputs.release_needed == 'true'
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "Tag $VERSION already exists; reusing it (force path)."
+          else
+            git tag "$VERSION"
+            git push origin "refs/tags/$VERSION"
+          fi
+
+      - name: Setup PHP
+        if: steps.decide.outputs.release_needed == 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+          tools: composer:v2
+
+      - name: Install production dependencies
+        if: steps.decide.outputs.release_needed == 'true'
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Compile translations
+        if: steps.decide.outputs.release_needed == 'true'
+        run: |
+          if compgen -G "languages/*.po" > /dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y gettext
+            for po in languages/*.po; do
+              msgfmt -o "${po%.po}.mo" "$po"
+              echo "Compiled $po"
+            done
+          else
+            echo "No .po files found in languages/; skipping msgfmt."
+          fi
+
+      - name: Build release zip
+        if: steps.decide.outputs.release_needed == 'true'
+        id: package
+        env:
+          SLUG: ${{ steps.slug.outputs.slug }}
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: |
+          mkdir -p "release/$SLUG"
+          rsync -a ./ "release/$SLUG/" \
+            --exclude='/release/' \
+            --exclude='/.git/' \
+            --exclude='/.github/' \
+            --exclude='/.claude/' \
+            --exclude='/node_modules/' \
+            --exclude='composer.json' \
+            --exclude='composer.lock' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='biome.json' \
+            --exclude='phpcs.xml' \
+            --exclude='phpcs.xml.dist' \
+            --exclude='phpstan.neon' \
+            --exclude='phpstan-bootstrap.php' \
+            --exclude='*.log' \
+            --exclude='.gitignore' \
+            --exclude='CLAUDE.md' \
+            --exclude='AGENTS.md' \
+            --exclude='.DS_Store'
+          ZIP="${SLUG}-${VERSION}.zip"
+          (cd release && zip -r "../$ZIP" "$SLUG")
+          ls -la "$ZIP"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        if: steps.decide.outputs.release_needed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.decide.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+        run: |
+          ARGS=("$VERSION" "$ZIP" --title "$VERSION" --generate-notes)
+          if [[ "$VERSION" == *-* ]]; then
+            ARGS+=(--prerelease)
+          fi
+          gh release create "${ARGS[@]}"
+
+      - name: Report skipped release
+        if: steps.decide.outputs.release_needed != 'true'
+        run: |
+          echo "::notice::Skipping release: no version bump."
+          echo "Re-run the workflow with the 'force' input to release anyway."

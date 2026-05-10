@@ -1,0 +1,33 @@
+---
+name: Lint
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'phpcs.xml'
+      - 'phpcs.xml.dist'
+      - 'phpstan.neon'
+      - 'phpstan-bootstrap.php'
+      - 'languages/**'
+  pull_request:
+    paths:
+      - '**/*.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'phpcs.xml'
+      - 'phpcs.xml.dist'
+      - 'phpstan.neon'
+      - 'phpstan-bootstrap.php'
+      - 'languages/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v2
