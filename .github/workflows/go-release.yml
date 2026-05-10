@@ -1,27 +1,6 @@
 ---
-# Reusable Go release workflow
-# Source: oszuidwest/.github-templates
-#
-# Trust-main release model: this workflow builds binaries from the tagged
-# commit and ships them. Verification (tests, lint, fmt) is the job of PR CI
-# on the way into main, not the release path. To gate a release on a custom
-# check (integration tests, smoke tests, etc.), compose via `needs:` from the
-# caller — see the README for the pattern.
-#
-# - Tag push or workflow_call with `version: edge` or `vX.Y.Z` (or `X.Y.Z`).
-# - Tag re-run guard so workflow_dispatch can be re-run on existing tags.
-#   When a tag already exists, that tag is checked out so the build matches
-#   the tag.
-# - Build matrix from JSON input.
-# - Ldflags inject PascalCase Version/Commit/BuildTime.
-# - GitHub Release with prerelease auto-detect via contains(version, '-').
-# - Edge artifact: <project>-edge-<sha>, no Docker push for edge.
-#
-# v2 dropped the nested docker job. To publish a Docker image alongside a
-# release, the caller adds a second job that calls docker-publish.yml@v1
-# directly, gated on `needs.release.outputs.is_release == 'true'`. See the
-# README for the composition pattern.
-
+# Trust-main release: builds the tagged commit and ships it. Gate on extra
+# checks (integration tests, etc.) by composing via `needs:` from the caller.
 name: Go Release
 
 on:
@@ -114,7 +93,7 @@ jobs:
               echo "version=edge-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
               echo "is_release=false" >> "$GITHUB_OUTPUT"
             else
-              # Auto-prefix v if user typed "1.2.3" instead of "v1.2.3"
+              # Auto-prefix v for "1.2.3" → "v1.2.3".
               case "$INPUT_VERSION" in
                 v*) VERSION="$INPUT_VERSION" ;;
                 *)  VERSION="v$INPUT_VERSION" ;;
@@ -145,9 +124,7 @@ jobs:
             git tag "$VERSION"
             git push origin "refs/tags/$VERSION"
           fi
-          # Always end on the tag commit so the embedded COMMIT ldflag matches
-          # the tag, and any downstream docker-publish job builds from the same
-          # source as the version label.
+          # End on the tag commit so COMMIT ldflag and downstream Docker build match.
           git checkout "refs/tags/$VERSION"
 
       - name: Build binaries
@@ -159,10 +136,7 @@ jobs:
           MAIN_PACKAGE: ${{ inputs.main-package }}
         run: |
           mkdir -p dist
-          # Resolve COMMIT from HEAD, not github.sha. After a manual re-run on
-          # an existing tag the previous step checks out the tag commit; the
-          # workflow-level github.sha still points at the dispatch-commit and
-          # would yield a binary whose embedded commit doesn't match the tag.
+          # HEAD, not github.sha: previous step may have checked out the tag.
           COMMIT=$(git rev-parse HEAD)
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
@@ -195,8 +169,6 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.version }}
           files: dist/*
-          # When body is non-empty, softprops/action-gh-release prepends it to
-          # the auto-generated notes. Empty body falls through to auto-only.
           body: ${{ inputs.release-body }}
           generate_release_notes: true
           draft: false
