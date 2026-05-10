@@ -83,6 +83,11 @@ jobs:
         run: |
           LATEST_TAG=$(git describe --tags \
             "$(git rev-list --tags --max-count=1)" 2>/dev/null || echo "")
+          # Compare bare versions: strip an optional leading 'v' from the tag
+          # so a header value of "0.5.2" outranks an existing "v0.5.1" tag.
+          # sort -V otherwise places the bare form before the v-prefixed one,
+          # which made version_gt return false when the prefixes differed.
+          LATEST_BARE="${LATEST_TAG#v}"
           version_gt() {
             test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
           }
@@ -92,7 +97,7 @@ jobs:
           elif [ -z "$LATEST_TAG" ]; then
             DECISION=true
             REASON="first release"
-          elif version_gt "$VERSION" "$LATEST_TAG"; then
+          elif version_gt "$VERSION" "$LATEST_BARE"; then
             DECISION=true
             REASON="version bumped from $LATEST_TAG to $VERSION"
           else
