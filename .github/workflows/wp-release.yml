@@ -166,6 +166,7 @@ jobs:
             --exclude='phpcs.xml.dist' \
             --exclude='phpstan.neon' \
             --exclude='phpstan-bootstrap.php' \
+            --exclude='phpstan-bootstrap.stub' \
             --exclude='*.log' \
             --exclude='.gitignore' \
             --exclude='CLAUDE.md' \

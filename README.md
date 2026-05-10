@@ -249,7 +249,7 @@ Outputs:
 - Version regex: `^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`. Pre-release versions (`X.Y.Z-beta.N`, etc.) are auto-marked `prerelease` on the GitHub release.
 - Production build: PHP 8.3 + `composer install --no-dev --optimize-autoloader`.
 - Translations: `msgfmt` runs over `languages/*.po` when any exist. `vendor/` and the compiled `.mo` files are bundled into the zip.
-- rsync exclude list (kept identical across consumers): `release/`, `.git/`, `.github/`, `.claude/`, `node_modules/`, `composer.json`, `composer.lock`, `package.json`, `package-lock.json`, `biome.json`, `phpcs.xml`, `phpcs.xml.dist`, `phpstan.neon`, `phpstan-bootstrap.php`, `*.log`, `.gitignore`, `CLAUDE.md`, `AGENTS.md`, `.DS_Store`. `vendor/` and `README.md` are kept in the zip.
+- rsync exclude list (kept identical across consumers): `release/`, `.git/`, `.github/`, `.claude/`, `node_modules/`, `composer.json`, `composer.lock`, `package.json`, `package-lock.json`, `biome.json`, `phpcs.xml`, `phpcs.xml.dist`, `phpstan.neon`, `phpstan-bootstrap.php`, `phpstan-bootstrap.stub`, `*.log`, `.gitignore`, `CLAUDE.md`, `AGENTS.md`, `.DS_Store`. `vendor/` and `README.md` are kept in the zip.
 
 The release job tags the current commit, builds `<slug>-<version>.zip`, and creates a GitHub release with `--generate-notes`. If the latest tag already matches the header version and `force` is `false`, the workflow exits with a notice and the `released` output is `'false'`.
 
