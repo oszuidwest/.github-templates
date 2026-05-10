@@ -23,17 +23,23 @@ on:
         type: string
         default: 'bun'
       deadcode-version:
-        description: 'golang.org/x/tools/cmd/deadcode version'
+        description: >-
+          Override deadcode version. Empty = use version pinned in
+          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
         type: string
-        default: 'v0.45.0'
+        default: ''
       govulncheck-version:
-        description: 'golang.org/x/vuln/cmd/govulncheck version'
+        description: >-
+          Override govulncheck version. Empty = use version pinned in
+          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
         type: string
-        default: 'v1.3.0'
+        default: ''
       staticcheck-version:
-        description: 'honnef.co/go/tools/cmd/staticcheck version'
+        description: >-
+          Override staticcheck version. Empty = use version pinned in
+          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
         type: string
-        default: '2026.1'
+        default: ''
 
 permissions:
   contents: read
@@ -44,6 +50,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      # tools/go.mod is the Dependabot-managed source of truth for
+      # analysis tool versions. Sparse-checkout keeps this cheap.
+      - name: Checkout central tool pins
+        uses: actions/checkout@v6
+        with:
+          repository: oszuidwest/.github-templates
+          ref: v2
+          path: .tool-pins
+          sparse-checkout: tools
+          sparse-checkout-cone-mode: false
 
       - uses: actions/setup-go@v6
         with:
@@ -70,12 +87,30 @@ jobs:
           version: ${{ inputs.golangci-lint-version }}
           args: --timeout=5m
 
-      # Installed centrally so consumers don't need tool directives in go.mod.
+      - name: Resolve analysis tool versions
+        id: tool_versions
+        working-directory: .tool-pins/tools
+        env:
+          GOTOOLCHAIN: auto
+          DEADCODE_OVERRIDE: ${{ inputs.deadcode-version }}
+          GOVULNCHECK_OVERRIDE: ${{ inputs.govulncheck-version }}
+          STATICCHECK_OVERRIDE: ${{ inputs.staticcheck-version }}
+        run: |
+          deadcode_v="${DEADCODE_OVERRIDE:-$(go list -m -f '{{.Version}}' golang.org/x/tools)}"
+          govulncheck_v="${GOVULNCHECK_OVERRIDE:-$(go list -m -f '{{.Version}}' golang.org/x/vuln)}"
+          staticcheck_v="${STATICCHECK_OVERRIDE:-$(go list -m -f '{{.Version}}' honnef.co/go/tools)}"
+          {
+            echo "deadcode=$deadcode_v"
+            echo "govulncheck=$govulncheck_v"
+            echo "staticcheck=$staticcheck_v"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved: deadcode=$deadcode_v govulncheck=$govulncheck_v staticcheck=$staticcheck_v"
+
       - name: Install Go analysis tools
         env:
-          DEADCODE_VERSION: ${{ inputs.deadcode-version }}
-          GOVULNCHECK_VERSION: ${{ inputs.govulncheck-version }}
-          STATICCHECK_VERSION: ${{ inputs.staticcheck-version }}
+          DEADCODE_VERSION: ${{ steps.tool_versions.outputs.deadcode }}
+          GOVULNCHECK_VERSION: ${{ steps.tool_versions.outputs.govulncheck }}
+          STATICCHECK_VERSION: ${{ steps.tool_versions.outputs.staticcheck }}
         run: |
           go install "golang.org/x/tools/cmd/deadcode@${DEADCODE_VERSION}"
           go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
