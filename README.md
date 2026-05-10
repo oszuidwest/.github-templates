@@ -3,7 +3,7 @@
 Shared GitHub Actions for repositories at oszuidwest. Two delivery models:
 
 - **Copy-paste templates** (`workflow-templates/`, `config-templates/`) — drop-in files. Use for project-shaped pieces (Dockerfile linting, Trivy scan, shellcheck) where the consumer barely customizes.
-- **Reusable workflows** (`.github/workflows/`) — called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@vX` (per-workflow major: `go-ci.yml@v1`, `go-release.yml@v2`, `docker-publish.yml@v1`). Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
+- **Reusable workflows** (`.github/workflows/`) — called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@v2`. Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
 
 ## Copy-paste templates
 
@@ -36,7 +36,7 @@ env:
 
 ## Reusable workflows
 
-Call from the consumer repo's own `.github/workflows/` files. Pinning to the moving major tag (`@v1`, `@v2`) follows template fixes automatically; pinning to a patch tag (`@v1.0.0`, `@v2.0.0`) freezes. Each reusable workflow has its own major line — see the per-workflow examples below for current versions.
+Call from the consumer repo's own `.github/workflows/` files. Pinning to the moving major tag (`@v2`) follows template fixes automatically; pinning to a patch tag (`@v2.0.0`) freezes.
 
 ### `go-ci.yml` — Go CI
 
@@ -48,7 +48,7 @@ on:
 permissions: { contents: read }
 jobs:
   ci:
-    uses: oszuidwest/.github-templates/.github/workflows/go-ci.yml@v1
+    uses: oszuidwest/.github-templates/.github/workflows/go-ci.yml@v2
     with:
       golangci-lint-version: v2.12.1
 ```
@@ -60,7 +60,7 @@ Inputs:
 | `golangci-lint-version` | string | no | `v2.12.1` | Passed to `golangci/golangci-lint-action`. |
 | `go-version-file` | string | no | `go.mod` | Passed to `actions/setup-go`. |
 | `enable-frontend` | boolean | no | `false` | Adds the frontend lint job. |
-| `frontend-tool` | string | no | `bun` | Only `bun` is supported in v1. |
+| `frontend-tool` | string | no | `bun` | Only `bun` is supported. |
 
 The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, `govulncheck`, and `staticcheck`. Consumers must keep `deadcode`, `govulncheck`, and `staticcheck` available through Go tool directives in `go.mod`.
 
@@ -126,7 +126,7 @@ jobs:
   docker:
     needs: release
     if: needs.release.outputs.is_release == 'true'
-    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v1
+    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v2
     with:
       version: ${{ needs.release.outputs.version }}
       image-labels: |
@@ -150,7 +150,7 @@ on:
 permissions: { contents: read }
 jobs:
   publish:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v1
+    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v2
     with:
       version: ${{ github.ref_name }}
     permissions:
@@ -204,10 +204,10 @@ The custom job lives in the consumer repo, the template stays small, and `needs:
 ## Maintenance contract
 
 - **Versioning:** semver. Patch for compatible bug fixes and documentation clarifications, minor for additive optional inputs, major for breaking changes (renamed/removed inputs, permission model changes, or default changes that break consumers). Each major line keeps an immutable `vX.Y.Z` and a moving `vX` tag; consumers pin to `@vX` to follow fixes, `@vX.Y.Z` to freeze.
-- **Active major lines:** `v1` (legacy — `go-release.yml` with nested `docker` job) and `v2` (current — composes with `docker-publish.yml` from a separate caller job). New consumers pin `@v2`; v1 stays available for already-pinned consumers until they migrate.
+- **Active major lines:** `v2` only. The `v1` line was retired in 2026-05 (zero remaining consumers); its tags no longer resolve.
 - **Release tags:** after a validated merge to `main`, tag the exact merge commit and move the major tag:
   ```bash
-  VERSION=v2.0.1   # or v1.x.y for a v1-line patch
+  VERSION=v2.0.1
   MAJOR=v2         # match VERSION's major
   git fetch origin main --tags
   git switch main
@@ -233,6 +233,8 @@ The custom job lives in the consumer repo, the template stays small, and `needs:
 
 ### Migrating `go-release.yml` from v1 to v2
 
+> **Note:** the `v1` tag was retired in 2026-05 — `go-release.yml@v1` no longer resolves. The steps below are kept as historical reference for anyone whose repo still carries v1 syntax. Replace `@v1` with `@v2` and follow the migration before pushing.
+
 v2 dropped the nested `docker` job and the four inputs that fed it (`enable-docker`, `image-labels`, `dockerfile-path`, `platforms`). Consumers that publish a Docker image now add a second job that calls `docker-publish.yml` directly.
 
 For a consumer currently calling `go-release.yml@v1` with `enable-docker: true`:
@@ -240,7 +242,7 @@ For a consumer currently calling `go-release.yml@v1` with `enable-docker: true`:
 1. Bump `@v1` → `@v2` on the release job.
 2. Drop `enable-docker`, `image-labels`, `dockerfile-path`, `platforms` from the release call.
 3. Drop `packages: write` from the release job's permissions (`contents: write` is enough now).
-4. Add a second job that calls `docker-publish.yml@v1` with `needs: release`, gated on `needs.release.outputs.is_release == 'true'`, and forwards `version` from the release outputs. See "Releasing with a Docker image" for the full snippet.
+4. Add a second job that calls `docker-publish.yml@v2` with `needs: release`, gated on `needs.release.outputs.is_release == 'true'`, and forwards `version` from the release outputs. See "Releasing with a Docker image" for the full snippet.
 
 For a consumer currently calling `go-release.yml@v1` with `enable-docker: false`:
 
