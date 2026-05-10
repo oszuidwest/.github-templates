@@ -16,6 +16,7 @@ cp workflow-templates/shell-quality.yml    .github/workflows/
 # Config
 cp config-templates/.hadolint.yaml         ./
 cp config-templates/dependabot.yml         .github/
+cp config-templates/phpcs.xml.dist         ./   # WordPress plugin baseline
 ```
 
 | Workflow | Purpose | Fails on |
@@ -33,6 +34,28 @@ env:
 ```
 
 **Adjust Hadolint rules?** Edit `.hadolint.yaml`, not the workflow.
+
+### `phpcs.xml.dist` - WordPress plugin baseline
+
+Shared phpcs ruleset for oszuidwest WordPress plugins. Drop into the plugin root as `phpcs.xml` (or `phpcs.xml.dist`) and prepend the per-plugin specifics. Required additions:
+
+```xml
+<file>my-plugin.php</file>
+<file>includes</file>
+
+<config name="text_domain" value="my-plugin"/>
+
+<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+    <properties>
+        <property name="prefixes" type="array">
+            <element value="my_plugin"/>
+            <element value="MY_PLUGIN"/>
+        </properties>
+    </properties>
+</rule>
+```
+
+The baseline locks down `WordPress-Extra` + `WordPress-Docs` + `PHPCompatibilityWP` against `8.3-8.4` / WP 6.8+. Override this file's `<config name="testVersion"/>` only when a plugin needs a wider PHP range.
 
 ## Reusable workflows
 
