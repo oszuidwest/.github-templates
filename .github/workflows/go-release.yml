@@ -24,7 +24,7 @@
 
 name: Go Release
 
-'on':
+on:
   workflow_call:
     inputs:
       project-name:
