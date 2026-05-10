@@ -1,0 +1,25 @@
+---
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Release even if the version was not bumped'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-release.yml@v2
+    with:
+      force: ${{ inputs.force }}
+      # Override only when the plugin slug differs from the repository name
+      # (e.g. zw-cacheman -> zuidwest-cache-manager). The slug must match the
+      # main PHP file: <slug>.php at the repo root.
+      # plugin-slug: zuidwest-cache-manager
+    permissions:
+      contents: write

@@ -168,6 +168,93 @@ Inputs:
 | `platforms` | string | no | `linux/amd64,linux/arm64` | Comma-separated Docker buildx platforms. |
 | `image-labels` | string | no | `''` | Multiline OCI labels passed to metadata/build. |
 
+### `wp-ci.yml` - WordPress plugin lint
+
+Strict shape, no inputs. PHP matrix `["8.3", "8.4"]`, fixed `wp-plugin-check` excludes, optional translations job that auto-runs when `languages/*.pot` exists.
+
+```yaml
+name: Lint
+on:
+  push: { branches: [main], paths: ['**/*.php', 'composer.json', 'composer.lock', 'phpcs.xml', 'phpstan.neon', 'languages/**'] }
+  pull_request: { paths: ['**/*.php', 'composer.json', 'composer.lock', 'phpcs.xml', 'phpstan.neon', 'languages/**'] }
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  lint:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v2
+```
+
+The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check excludes are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`. Plugins that fail other checks fix it in code rather than configuring the workflow.
+
+The `translations` job auto-detects `languages/*.pot`, runs `wp i18n make-pot` against a fresh copy, and fails on missing strings. Slug and domain are derived from the POT filename (e.g. `languages/foo.pot` -> slug+domain `foo`).
+
+Consumer requirements: `composer.json` declares `phpcs` and `phpstan` as dev dependencies; `phpcs.xml` (or `phpcs.xml.dist`) and `phpstan.neon` exist at repo root.
+
+### `wp-js-ci.yml` - WordPress plugin JS lint
+
+Strict shape, no inputs. Node 24, `npm ci`, `npm run lint`. Convention: consumer's `package.json` defines `lint` (typically `biome check assets/`).
+
+```yaml
+name: JS Lint
+on:
+  push: { branches: [main], paths: ['**/*.js', '**/*.ts', '**/*.css', 'package.json', 'package-lock.json', 'biome.json'] }
+  pull_request: { paths: ['**/*.js', '**/*.ts', '**/*.css', 'package.json', 'package-lock.json', 'biome.json'] }
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  lint:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-js-ci.yml@v2
+```
+
+### `wp-release.yml` - WordPress plugin release
+
+Manual `workflow_dispatch`. Reads the `Version:` header from `<plugin-slug>.php`, compares against the latest git tag, and tags + zips + publishes when bumped (or when `force: true`). Translations are auto-compiled when `languages/*.po` exists.
+
+```yaml
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Release even if the version was not bumped'
+        type: boolean
+        default: false
+permissions: { contents: read }
+jobs:
+  release:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-release.yml@v2
+    with:
+      force: ${{ inputs.force }}
+      # plugin-slug: zuidwest-cache-manager  # override only if slug != repo name
+    permissions:
+      contents: write
+```
+
+Inputs:
+
+| Input | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `plugin-slug` | string | no | repo name | Used as zip rootdir, zip filename, and expected main file (`<slug>.php` at repo root). Override only when slug differs from repo name. |
+| `force` | boolean | no | `false` | Release even when the version is not bumped. |
+
+Outputs:
+
+| Output | Notes |
+|--------|-------|
+| `version` | Version extracted from the plugin header. |
+| `released` | `'true'` when a GitHub release was created, `'false'` when skipped. |
+
+**Fixed shape (no inputs):**
+
+- Version regex: `^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`. Pre-release versions (`X.Y.Z-beta.N`, etc.) are auto-marked `prerelease` on the GitHub release.
+- Production build: PHP 8.3 + `composer install --no-dev --optimize-autoloader`.
+- Translations: `msgfmt` runs over `languages/*.po` when any exist. `vendor/` and the compiled `.mo` files are bundled into the zip.
+- rsync exclude list (kept identical across consumers): `release/`, `.git/`, `.github/`, `.claude/`, `node_modules/`, `composer.json`, `composer.lock`, `package.json`, `package-lock.json`, `biome.json`, `phpcs.xml`, `phpcs.xml.dist`, `phpstan.neon`, `phpstan-bootstrap.php`, `*.log`, `.gitignore`, `CLAUDE.md`, `AGENTS.md`, `.DS_Store`. `vendor/` and `README.md` are kept in the zip.
+
+The release job tags the current commit, builds `<slug>-<version>.zip`, and creates a GitHub release with `--generate-notes`. If the latest tag already matches the header version and `force` is `false`, the workflow exits with a notice and the `released` output is `'false'`.
+
+The `plugin-slug` input exists for plugins where the slug currently differs from the repo name (`zw-cacheman` -> `zuidwest-cache-manager`, `zw-liveblog` -> `zuidwest-liveblog`, `zw-gr26-wp` -> `zw-gr26`). Those plugins have open rename issues; once landed, they can drop the override.
+
 ### Composing custom pre-release gates
 
 `go-release.yml` is build-and-ship only - it does not run tests, lint, or fmt. The assumption is that PR CI already gated the merge into main, so a tag on main is releasable by construction. This is the standard "trust main" model: don't repeat verification work in the release path.
