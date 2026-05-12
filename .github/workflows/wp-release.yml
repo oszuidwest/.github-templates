@@ -130,6 +130,25 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      - name: Clear Composer GitHub auth
+        if: steps.decide.outputs.release_needed == 'true'
+        run: |
+          php -r '
+          $file = getenv("HOME") . "/.composer/auth.json";
+          if (! is_file($file)) {
+              exit(0);
+          }
+          $auth = json_decode((string) file_get_contents($file), true);
+          if (! is_array($auth)) {
+              exit(0);
+          }
+          unset($auth["github-oauth"]["github.com"]);
+          if (isset($auth["github-oauth"]) && [] === $auth["github-oauth"]) {
+              unset($auth["github-oauth"]);
+          }
+          file_put_contents($file, json_encode($auth, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+          '
+
       - name: Install production dependencies
         if: steps.decide.outputs.release_needed == 'true'
         run: composer install --no-dev --optimize-autoloader
