@@ -22,16 +22,13 @@ cp config-templates/phpcs.xml.dist         ./   # WordPress plugin baseline
 | Workflow | Purpose | Fails on |
 |----------|---------|----------|
 | docker-quality | Dockerfile, YAML and Compose linting | Lint errors |
-| docker-security | Vulnerability scanning (Trivy) | CRITICAL CVEs |
+| docker-security | Thin caller for centralized Trivy scanning | Never; reports only |
 | shell-quality | ShellCheck (only on .sh changes) | Lint errors |
 
 ### Customization
 
-**Dockerfile not in root?**
-```yaml
-env:
-  DOCKERFILE_PATH: "docker/Dockerfile"
-```
+**Dockerfile not in root?** Call `docker-security-build.yml` directly and pass
+`dockerfile-path`; see the reusable workflow section below.
 
 **Adjust Hadolint rules?** Edit `.hadolint.yaml`, not the workflow.
 
@@ -59,7 +56,104 @@ The baseline locks down `WordPress-Extra` + `WordPress-Docs` + `PHPCompatibility
 
 ## Reusable workflows
 
-Call from the consumer repo's own `.github/workflows/` files. Pinning to the moving major tag (`@v2`) follows template fixes automatically; pinning to a patch tag (`@v2.0.0`) freezes.
+Call from the consumer repo's own `.github/workflows/` files. Most reusable
+workflows should pin to the moving major tag (`@v2`) so template fixes follow
+automatically, or to a patch tag (`@v2.0.0`) to freeze. The Docker security
+callers currently pin to `@main` because the whole point is to absorb scanning
+policy updates centrally without rolling every repository.
+
+### `docker-security-build.yml` - reusable Docker image scan
+
+Builds the caller repository's Docker image locally and scans it with Trivy.
+SARIF is uploaded to GitHub Security only for public non-PR runs; pull requests
+and private repositories still get a non-blocking high/critical table summary.
+
+```yaml
+name: Docker Security
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule:
+    - cron: "0 4 * * 0"
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  security:
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main
+    with:
+      event-name: ${{ github.event_name }}
+      repository-private: ${{ github.event.repository.private }}
+```
+
+Inputs:
+
+| Input | Type | Required | Default | Notes |
+|-------|------|----------|---------|-------|
+| `context` | string | no | `.` | Docker build context. |
+| `dockerfile-path` | string | no | `Dockerfile` | Dockerfile path relative to repo root. |
+| `image-ref` | string | no | `<owner>/<repo>:security-scan` | Local image ref used by Trivy. |
+| `build-args` | string | no | `''` | Multiline Docker build args. |
+| `event-name` | string | yes | n/a | Pass `${{ github.event_name }}` from the caller. |
+| `repository-private` | boolean | yes | n/a | Pass `${{ github.event.repository.private }}`. |
+| `sarif-severity` | string | no | `CRITICAL,HIGH,MEDIUM` | Severities uploaded to GitHub Security. |
+| `summary-severity` | string | no | `CRITICAL,HIGH` | Severities shown in logs. |
+| `scanners` | string | no | `vuln,secret` | Trivy scanners. |
+| `timeout-minutes` | number | no | `30` | Job timeout. |
+
+Example for a non-root Dockerfile with build args:
+
+```yaml
+jobs:
+  security:
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main
+    with:
+      dockerfile-path: docker/Dockerfile
+      build-args: |
+        TOOL=odr-padenc
+        VERSION=${{ needs.env.outputs.odr-padenc-version }}
+      event-name: ${{ github.event_name }}
+      repository-private: ${{ github.event.repository.private }}
+```
+
+### `docker-security-images.yml` - reusable existing image scan
+
+Scans one or more existing image references. Use this for deployment repos that
+pin upstream images in Compose instead of building a local Dockerfile.
+
+```yaml
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    outputs:
+      images-json: ${{ steps.images.outputs.images-json }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: images
+        run: |
+          IMAGE="$(awk '$2 ~ /^example:/ { print $2; exit }' docker-compose.yml)"
+          echo "images-json=$(jq -cn --arg image "$IMAGE" \
+            '[{name:"app", image:$image, category:"container-app"}]')" \
+            >> "$GITHUB_OUTPUT"
+
+  security:
+    needs: images
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-images.yml@main
+    with:
+      images-json: ${{ needs.images.outputs.images-json }}
+      event-name: ${{ github.event_name }}
+      repository-private: ${{ github.event.repository.private }}
+```
+
+`images-json` is a JSON array. Each entry supports:
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `name` | yes | Matrix display name. |
+| `image` | yes | Image reference for Trivy. |
+| `category` | yes | SARIF category, e.g. `container-caddy`. |
+| `pkg_types` | no | Trivy package types. Defaults to `os,library`; use `os` for OS-only scans. |
 
 ### `go-ci.yml` - Go CI
 

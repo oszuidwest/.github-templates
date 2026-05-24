@@ -1,0 +1,86 @@
+---
+name: Docker Security Images
+
+"on":
+  workflow_call:
+    inputs:
+      images-json:
+        description: >-
+          JSON array of images to scan. Each item supports name, image,
+          category, and optional pkg_types.
+        type: string
+        required: true
+      event-name:
+        description: Caller event name, usually github.event_name.
+        type: string
+        required: true
+      repository-private:
+        description: Whether the caller repository is private.
+        type: boolean
+        required: true
+      sarif-severity:
+        description: Severities uploaded to GitHub Security.
+        type: string
+        default: CRITICAL,HIGH
+      summary-severity:
+        description: Severities shown in the pull request log summary.
+        type: string
+        default: CRITICAL,HIGH
+      scanners:
+        description: Trivy scanners to run.
+        type: string
+        default: vuln,secret
+      timeout-minutes:
+        description: Job timeout in minutes.
+        type: number
+        default: 15
+
+jobs:
+  security-scan:
+    name: Security scan (${{ matrix.image.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(inputs.images-json) }}
+
+    steps:
+      - name: Trivy SARIF report
+        if: >-
+          inputs.event-name != 'pull_request' &&
+          inputs.repository-private == false
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image.image }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: ${{ inputs.sarif-severity }}
+          scanners: ${{ inputs.scanners }}
+          vuln-type: ${{ matrix.image.pkg_types || 'os,library' }}
+          ignore-unfixed: true
+          exit-code: "0"
+          limit-severities-for-sarif: true
+
+      - name: Upload Trivy results to GitHub Security
+        if: >-
+          inputs.event-name != 'pull_request' &&
+          inputs.repository-private == false
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: ${{ matrix.image.category }}
+
+      - name: Trivy high and critical summary
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image.image }}
+          format: table
+          severity: ${{ inputs.summary-severity }}
+          scanners: ${{ inputs.scanners }}
+          vuln-type: ${{ matrix.image.pkg_types || 'os,library' }}
+          ignore-unfixed: true
+          exit-code: "0"
