@@ -2,7 +2,7 @@
 # Requires .hadolint.yaml at the repo root.
 name: Docker Quality
 
-on:
+"on":
   push:
     branches: [main]
   pull_request:
@@ -29,18 +29,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v6
 
-      - name: Check for Dockerfile
-        id: check_dockerfile
-        run: |
-          if [ -f "${{ env.DOCKERFILE_PATH }}" ]; then
-            echo "has_dockerfile=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_dockerfile=false" >> "$GITHUB_OUTPUT"
-          fi
-
       # Ignore rules live in .hadolint.yaml - do not duplicate here.
       - name: Hadolint
-        if: steps.check_dockerfile.outputs.has_dockerfile == 'true'
+        if: ${{ hashFiles(env.DOCKERFILE_PATH) != '' }}
         uses: hadolint/hadolint-action@v3.3.0
         with:
           dockerfile: ${{ env.DOCKERFILE_PATH }}
@@ -61,23 +52,28 @@ jobs:
               document-start:
                 present: true
 
-      - name: Check for Docker Compose
-        id: check_compose
-        run: |
-          COMPOSE_FILES=""
-          for f in docker-compose.yml docker-compose.yaml compose.yml compose.yaml; do
-            if [ -f "$f" ]; then
-              COMPOSE_FILES="$COMPOSE_FILES $f"
-            fi
-          done
-          if [ -n "$COMPOSE_FILES" ]; then
-            echo "has_compose=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_compose=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Set up Docker Compose
+        if: >-
+          ${{
+            hashFiles(
+              'docker-compose.yml',
+              'docker-compose.yaml',
+              'compose.yml',
+              'compose.yaml'
+            ) != ''
+          }}
+        uses: docker/setup-compose-action@v2
 
       - name: Docker Compose Validation
-        if: steps.check_compose.outputs.has_compose == 'true'
+        if: >-
+          ${{
+            hashFiles(
+              'docker-compose.yml',
+              'docker-compose.yaml',
+              'compose.yml',
+              'compose.yaml'
+            ) != ''
+          }}
         run: |
           if [ ! -f ".env" ]; then
             touch .env
@@ -85,7 +81,7 @@ jobs:
           if ! OUTPUT=$(docker compose config --quiet 2>&1); then
             # Missing env vars: warn. Syntax errors: fail.
             if echo "$OUTPUT" | grep -qi "variable is not set"; then
-              echo "::warning::Docker Compose validation requires environment variables: $OUTPUT"
+              echo "::warning::Compose env vars required: $OUTPUT"
             else
               echo "::error::Docker Compose validation failed: $OUTPUT"
               exit 1

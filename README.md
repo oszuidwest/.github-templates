@@ -67,6 +67,8 @@ policy updates centrally without rolling every repository.
 Builds the caller repository's Docker image locally and scans it with Trivy.
 SARIF is uploaded to GitHub Security only for public non-PR runs; pull requests
 and private repositories still get a non-blocking high/critical table summary.
+Docker layer cache is imported from GitHub Actions cache and exported
+best-effort after the build.
 
 ```yaml
 name: Docker Security
@@ -274,6 +276,11 @@ jobs:
       contents: read
       packages: write
 ```
+
+The workflow sets up QEMU before Buildx so the default
+`linux/amd64,linux/arm64` platforms build on GitHub-hosted runners.
+Docker layer cache is imported from GitHub Actions cache and exported
+best-effort after the build.
 
 Inputs:
 

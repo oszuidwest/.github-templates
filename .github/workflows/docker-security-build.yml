@@ -78,6 +78,8 @@ jobs:
           load: true
           tags: ${{ env.IMAGE_REF }}
           build-args: ${{ inputs.build-args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,ignore-error=true
 
       - name: Trivy SARIF report
         if: >-
