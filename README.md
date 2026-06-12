@@ -235,6 +235,10 @@ keeps caller-side `needs:` gates aligned with the binaries that are published.
 Set `allow-tag-rebuild: true` only when intentionally rebuilding an existing
 tag from its original commit.
 
+Supported triggers are tag pushes (`refs/tags/*`) and `workflow_dispatch`. Any
+other event — including branch pushes, `schedule`, and `release` — fails fast
+instead of being treated as a release.
+
 #### Releasing with a Docker image
 
 v2 dropped the nested docker job. Compose with `docker-publish.yml` from a second job in the caller workflow, gated on the release outputs:
