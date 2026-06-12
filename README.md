@@ -215,6 +215,7 @@ Inputs:
 | `build-matrix` | string | yes | n/a | JSON array of `{os, arch, arm?}` build targets. |
 | `main-package` | string | no | `.` | Set to `./cmd/foo` for non-root commands. |
 | `version` | string | no | `''` | Forward the caller's `workflow_dispatch` input; leave empty for tag pushes. |
+| `allow-tag-rebuild` | boolean | no | `false` | Permit a manual rebuild of a pre-existing tag whose commit differs from the dispatch ref. |
 | `release-body` | string | no | `''` | Optional markdown prepended to generated release notes. |
 
 Outputs:
@@ -223,8 +224,16 @@ Outputs:
 |--------|-------|
 | `version` | Resolved release version. `vX.Y.Z` for tagged runs, `edge-<short-sha>` for edge. |
 | `is_release` | `'true'` for tagged releases (including prereleases), `'false'` for edge. Gate downstream Docker publish on this. |
+| `commit` | Resolved build commit SHA. Usually matches `github.sha`; differs only for explicit tag rebuilds. |
 
 **LDFLAGS contract:** the workflow injects PascalCase symbols `Version`, `Commit`, `BuildTime` at the package path you pass in `ldflags-target`. The Go package must declare those exact identifiers (e.g. `var Version, Commit, BuildTime string`). Lowercase names (`version`, `buildTime`) are not patched.
+
+For manual releases, `version: vX.Y.Z` creates the tag on the dispatch commit
+when it does not already exist. If the tag already exists, the workflow only
+reuses it by default when it points at the same commit as the dispatch ref. This
+keeps caller-side `needs:` gates aligned with the binaries that are published.
+Set `allow-tag-rebuild: true` only when intentionally rebuilding an existing
+tag from its original commit.
 
 #### Releasing with a Docker image
 
@@ -410,7 +419,13 @@ jobs:
       contents: write
 ```
 
-The custom job lives in the consumer repo, the template stays small, and `needs:` short-circuits the release if the gate fails.
+The custom job lives in the consumer repo, the template stays small, and
+`needs:` short-circuits the release if the gate fails. On manual releases of an
+existing `vX.Y.Z` tag, the release workflow also verifies that the tag points at
+the same commit as the dispatch ref. That prevents a gate on `main` from
+accidentally approving binaries rebuilt from an older tag. If you must rebuild
+an existing tag, set `allow-tag-rebuild: true` on the release job and treat that
+run as an explicit bypass of caller-side gates for the tag commit.
 
 ## Maintenance contract
 
