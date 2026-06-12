@@ -90,6 +90,7 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ -z "$INPUT_VERSION" ]; then
@@ -109,18 +110,32 @@ jobs:
               echo "version=$VERSION" >> "$GITHUB_OUTPUT"
               echo "is_release=true" >> "$GITHUB_OUTPUT"
             fi
+          elif [ "$EVENT_NAME" = "push" ]; then
+            case "$GITHUB_REF" in
+              refs/tags/*)
+                echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+                echo "is_release=true" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "::error::Push on $GITHUB_REF is not a tag ref."
+                echo "::error::This workflow releases tag pushes only."
+                exit 1
+                ;;
+            esac
           else
-            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Unsupported event '$EVENT_NAME'."
+            echo "::error::Supported triggers: tag push, workflow_dispatch."
+            exit 1
           fi
 
       - name: Create or check out version tag (manual release)
         if: >-
-          github.event_name != 'push' &&
+          github.event_name == 'workflow_dispatch' &&
           steps.version.outputs.is_release == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
           ALLOW_TAG_REBUILD: ${{ inputs.allow-tag-rebuild }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -145,6 +160,7 @@ jobs:
 
       - name: Resolve build commit
         id: target
+        # HEAD, not github.sha: the previous step may have checked out the tag.
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-go@v6
