@@ -3,7 +3,7 @@
 # Convention: consumer's package.json defines the lint script (typically biome).
 name: WP JS CI
 
-on:
+"on":
   workflow_call:
 
 permissions:

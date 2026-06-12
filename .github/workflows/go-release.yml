@@ -3,7 +3,7 @@
 # checks (integration tests, etc.) by composing via `needs:` from the caller.
 name: Go Release
 
-on:
+"on":
   workflow_call:
     inputs:
       project-name:

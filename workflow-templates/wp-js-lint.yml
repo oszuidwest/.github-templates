@@ -1,7 +1,7 @@
 ---
 name: JS Lint
 
-on:
+"on":
   push:
     branches: [main]
     paths:

@@ -72,7 +72,7 @@ best-effort after the build.
 
 ```yaml
 name: Docker Security
-on:
+"on":
   push: { branches: [main] }
   pull_request:
   schedule:
@@ -161,7 +161,7 @@ jobs:
 
 ```yaml
 name: CI
-on:
+"on":
   push: { branches: [main], paths: ['**.go', 'go.mod', 'go.sum'] }
   pull_request: { branches: [main], paths: ['**.go', 'go.mod', 'go.sum'] }
 permissions: { contents: read }
@@ -187,7 +187,7 @@ The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with di
 
 ```yaml
 name: Release
-on:
+"on":
   push: { tags: ['v*'] }
   workflow_dispatch:
     inputs:
@@ -277,7 +277,7 @@ Called from a release flow alongside `go-release.yml` (see "Releasing with a Doc
 
 ```yaml
 name: Publish Docker
-on:
+"on":
   push: { tags: ['v*'] }
 permissions: { contents: read }
 jobs:
@@ -311,7 +311,7 @@ Strict shape, no inputs. PHP matrix `["8.3", "8.4"]`, fixed `wp-plugin-check` ex
 
 ```yaml
 name: Lint
-on:
+"on":
   push: { branches: [main], paths: ['**/*.php', 'composer.json', 'composer.lock', 'phpcs.xml', 'phpstan.neon', 'languages/**'] }
   pull_request: { paths: ['**/*.php', 'composer.json', 'composer.lock', 'phpcs.xml', 'phpstan.neon', 'languages/**'] }
   workflow_dispatch:
@@ -333,7 +333,7 @@ Strict shape, no inputs. Node 24, `npm ci`, `npm run lint`. Convention: consumer
 
 ```yaml
 name: JS Lint
-on:
+"on":
   push: { branches: [main], paths: ['**/*.js', '**/*.ts', '**/*.css', 'package.json', 'package-lock.json', 'biome.json'] }
   pull_request: { paths: ['**/*.js', '**/*.ts', '**/*.css', 'package.json', 'package-lock.json', 'biome.json'] }
   workflow_dispatch:
@@ -349,7 +349,7 @@ Manual `workflow_dispatch`. Reads the `Version:` header from `<plugin-slug>.php`
 
 ```yaml
 name: Release
-on:
+"on":
   workflow_dispatch:
     inputs:
       force:
@@ -400,7 +400,7 @@ If a consumer needs an extra pre-release check that PR CI doesn't cover (integra
 
 ```yaml
 name: Release
-on:
+"on":
   push: { tags: ['v*'] }
   workflow_dispatch:
     inputs:

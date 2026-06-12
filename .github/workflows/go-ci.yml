@@ -1,7 +1,7 @@
 ---
 name: Go CI
 
-on:
+"on":
   workflow_call:
     inputs:
       golangci-lint-version:

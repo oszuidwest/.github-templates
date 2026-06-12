@@ -4,7 +4,7 @@
 # forced). Translations are auto-compiled when languages/*.po exists.
 name: WP Release
 
-on:
+"on":
   workflow_call:
     inputs:
       plugin-slug:
