@@ -34,6 +34,13 @@ on:
           Accepts "edge", "vX.Y.Z", or "X.Y.Z". Leave empty for tag pushes.
         type: string
         default: ''
+      allow-tag-rebuild:
+        description: >-
+          Allow workflow_dispatch to rebuild a pre-existing tag when that tag
+          points at a different commit than the workflow dispatch ref. Keep
+          false so caller `needs:` gates cover the commit that is released.
+        type: boolean
+        default: false
       release-body:
         description: >-
           Optional release-notes prefix prepended to auto-generated notes.
@@ -54,6 +61,11 @@ on:
           runs. Gate downstream Docker publish jobs on this so edge builds
           stay artifacts-only.
         value: ${{ jobs.release.outputs.is_release }}
+      commit:
+        description: >-
+          Resolved build commit SHA. For manual rebuilds with allow-tag-rebuild
+          set, this can differ from `github.sha`.
+        value: ${{ jobs.release.outputs.commit }}
 
 permissions:
   contents: read
@@ -66,22 +78,19 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       is_release: ${{ steps.version.outputs.is_release }}
+      commit: ${{ steps.target.outputs.commit }}
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-
       - name: Determine version
         id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
           EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             if [ -z "$INPUT_VERSION" ]; then
@@ -101,31 +110,66 @@ jobs:
               echo "version=$VERSION" >> "$GITHUB_OUTPUT"
               echo "is_release=true" >> "$GITHUB_OUTPUT"
             fi
+          elif [ "$EVENT_NAME" = "push" ]; then
+            case "$GITHUB_REF" in
+              refs/tags/*)
+                echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+                echo "is_release=true" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                echo "::error::Push on $GITHUB_REF is not a tag ref."
+                echo "::error::This workflow releases tag pushes only."
+                exit 1
+                ;;
+            esac
           else
-            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "::error::Unsupported event '$EVENT_NAME'."
+            echo "::error::Supported triggers: tag push, workflow_dispatch."
+            exit 1
           fi
-
-      - name: Download dependencies
-        run: go mod download
 
       - name: Create or check out version tag (manual release)
         if: >-
-          github.event_name != 'push' &&
+          github.event_name == 'workflow_dispatch' &&
           steps.version.outputs.is_release == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          ALLOW_TAG_REBUILD: ${{ inputs.allow-tag-rebuild }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            TAG_SHA=$(git rev-list -n 1 "refs/tags/$VERSION")
+            if [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+              if [ "$ALLOW_TAG_REBUILD" != "true" ]; then
+                echo "::error::Tag $VERSION points to $TAG_SHA."
+                echo "::error::This workflow was dispatched at $GITHUB_SHA."
+                echo "::error::Caller gates run against the dispatch commit."
+                echo "::error::Set allow-tag-rebuild: true to rebuild it."
+                exit 1
+              fi
+            fi
             echo "Tag $VERSION already exists; checking out that tag."
           else
             git tag "$VERSION"
             git push origin "refs/tags/$VERSION"
           fi
-          # End on the tag commit so COMMIT ldflag and downstream Docker build match.
+          # End on the tag commit so COMMIT and downstream Docker build match.
           git checkout "refs/tags/$VERSION"
+
+      - name: Resolve build commit
+        id: target
+        # HEAD, not github.sha: the previous step may have checked out the tag.
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
 
       - name: Build binaries
         env:
@@ -134,10 +178,9 @@ jobs:
           LDFLAGS_TARGET: ${{ inputs.ldflags-target }}
           BUILD_MATRIX: ${{ inputs.build-matrix }}
           MAIN_PACKAGE: ${{ inputs.main-package }}
+          COMMIT: ${{ steps.target.outputs.commit }}
         run: |
           mkdir -p dist
-          # HEAD, not github.sha: previous step may have checked out the tag.
-          COMMIT=$(git rev-parse HEAD)
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
           echo "$BUILD_MATRIX" | jq -c '.[]' | while read -r entry; do
