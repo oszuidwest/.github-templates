@@ -48,6 +48,14 @@ name: Go Release
           etc. When empty, only auto-generated notes are used.
         type: string
         default: ''
+      extra-ldflags-per-os:
+        description: >-
+          Optional JSON object mapping GOOS to additional `-ldflags` values
+          appended verbatim to that OS's build after the Version, Commit, and
+          BuildTime symbols. Values must be strings a plain `go build
+          -ldflags=` accepts. Missing keys mean no extras for that OS.
+        type: string
+        default: '{}'
     outputs:
       version:
         description: >-
@@ -179,6 +187,7 @@ jobs:
           BUILD_MATRIX: ${{ inputs.build-matrix }}
           MAIN_PACKAGE: ${{ inputs.main-package }}
           COMMIT: ${{ steps.target.outputs.commit }}
+          EXTRA_LDFLAGS_PER_OS: ${{ inputs.extra-ldflags-per-os }}
         run: |
           mkdir -p dist
           BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -198,6 +207,11 @@ jobs:
             LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.Version=${VERSION}"
             LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.Commit=${COMMIT}"
             LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.BuildTime=${BUILD_TIME}"
+
+            EXTRA=$(echo "$EXTRA_LDFLAGS_PER_OS" | jq -r --arg os "$GOOS" '.[$os] // ""')
+            if [ -n "$EXTRA" ]; then
+              LDFLAGS="$LDFLAGS $EXTRA"
+            fi
 
             env GOOS="$GOOS" GOARCH="$GOARCH" GOARM="$GOARM" CGO_ENABLED=0 \
               go build \
