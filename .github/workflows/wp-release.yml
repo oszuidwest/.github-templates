@@ -39,7 +39,7 @@ jobs:
       released: ${{ steps.decide.outputs.release_needed }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
