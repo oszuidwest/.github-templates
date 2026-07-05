@@ -208,7 +208,8 @@ jobs:
             LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.Commit=${COMMIT}"
             LDFLAGS="$LDFLAGS -X ${LDFLAGS_TARGET}.BuildTime=${BUILD_TIME}"
 
-            EXTRA=$(echo "$EXTRA_LDFLAGS_PER_OS" | jq -r --arg os "$GOOS" '.[$os] // ""')
+            EXTRA=$(echo "$EXTRA_LDFLAGS_PER_OS" \
+              | jq -r --arg os "$GOOS" '.[$os] // ""')
             if [ -n "$EXTRA" ]; then
               LDFLAGS="$LDFLAGS $EXTRA"
             fi

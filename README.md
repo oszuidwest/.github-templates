@@ -217,6 +217,7 @@ Inputs:
 | `version` | string | no | `''` | Forward the caller's `workflow_dispatch` input; leave empty for tag pushes. |
 | `allow-tag-rebuild` | boolean | no | `false` | Permit a manual rebuild of a pre-existing tag whose commit differs from the dispatch ref. |
 | `release-body` | string | no | `''` | Optional markdown prepended to generated release notes. |
+| `extra-ldflags-per-os` | string | no | `'{}'` | JSON object mapping GOOS to extra `-ldflags` appended after the injected symbols, e.g. `'{"windows":"-H windowsgui"}'`. |
 
 Outputs:
 
