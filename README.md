@@ -212,7 +212,7 @@ Inputs:
 |-------|------|----------|---------|-------|
 | `project-name` | string | yes | n/a | Binary basename and edge artifact prefix. |
 | `ldflags-target` | string | yes | n/a | Package path containing `Version`, `Commit`, and `BuildTime`. |
-| `build-matrix` | string | yes | n/a | JSON array of `{os, arch, arm?}` build targets. |
+| `build-matrix` | string | yes | n/a | JSON array of `{os, arch, arm?, ldflags?}` build targets; optional `ldflags` is appended after the injected symbols, e.g. `{"os":"windows","arch":"amd64","ldflags":"-H windowsgui"}`. |
 | `main-package` | string | no | `.` | Set to `./cmd/foo` for non-root commands. |
 | `version` | string | no | `''` | Forward the caller's `workflow_dispatch` input; leave empty for tag pushes. |
 | `allow-tag-rebuild` | boolean | no | `false` | Permit a manual rebuild of a pre-existing tag whose commit differs from the dispatch ref. |
