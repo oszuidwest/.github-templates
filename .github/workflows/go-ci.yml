@@ -123,9 +123,13 @@ jobs:
           go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
 
+      # -test counts test functions as reachability roots, so code that is
+      # only reachable from platform-tagged files plus tests on this
+      # platform is not a false positive. Trade-off: dead production code
+      # that still has tests is not reported.
       - name: Check for dead code
         run: |
-          deadcode_output=$(deadcode ./...)
+          deadcode_output=$(deadcode -test ./...)
           if [ -n "$deadcode_output" ]; then
             echo "$deadcode_output"
             exit 1
