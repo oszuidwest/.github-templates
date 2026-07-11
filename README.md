@@ -67,8 +67,9 @@ policy updates centrally without rolling every repository.
 Builds the caller repository's Docker image locally and scans it with Trivy.
 SARIF is uploaded to GitHub Security only for public non-PR runs; pull requests
 and private repositories still get a non-blocking high/critical table summary.
-Docker layer cache is imported from GitHub Actions cache and exported
-best-effort after the build.
+The image is always built without layer cache: cached RUN layers freeze
+package installs, so a cached scan keeps reporting stale packages and misses
+security updates that a fresh build would pull in.
 
 ```yaml
 name: Docker Security

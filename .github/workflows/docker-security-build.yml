@@ -85,8 +85,10 @@ jobs:
           load: true
           tags: ${{ env.IMAGE_REF }}
           build-args: ${{ inputs.build-args }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
+          # No layer cache on purpose: cached RUN layers freeze package
+          # installs, so the scan keeps seeing stale packages and misses
+          # security updates that a fresh build would pull in.
+          no-cache: true
 
       - name: Trivy SARIF report
         if: >-
