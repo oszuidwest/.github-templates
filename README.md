@@ -97,6 +97,7 @@ Inputs:
 | `dockerfile-path` | string | no | `Dockerfile` | Dockerfile path relative to repo root. |
 | `image-ref` | string | no | `<owner>/<repo>:security-scan` | Local image ref used by Trivy. |
 | `build-args` | string | no | `''` | Multiline Docker build args. |
+| `category` | string | no | `''` | SARIF upload category. Set a unique value per image when one repo scans multiple images; empty uses the codeql-action default. |
 | `event-name` | string | yes | n/a | Pass `${{ github.event_name }}` from the caller. |
 | `repository-private` | boolean | yes | n/a | Pass `${{ github.event.repository.private }}`. |
 | `sarif-severity` | string | no | `CRITICAL,HIGH,MEDIUM` | Severities uploaded to GitHub Security. |
@@ -115,6 +116,32 @@ jobs:
       build-args: |
         TOOL=odr-padenc
         VERSION=${{ needs.env.outputs.odr-padenc-version }}
+      event-name: ${{ github.event_name }}
+      repository-private: ${{ github.event.repository.private }}
+```
+
+When one Dockerfile produces multiple images (different build args), call the
+workflow with a matrix and give every image its own `category`. Without a
+unique category the SARIF uploads share one analysis and overwrite each other,
+so only the last-uploaded image is visible in the Security tab:
+
+```yaml
+jobs:
+  security:
+    name: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: odr-padenc, tool: odr-padenc, variant: "" }
+          - { image: odr-audioenc-full, tool: odr-audioenc, variant: full }
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main
+    with:
+      dockerfile-path: docker/Dockerfile
+      build-args: |
+        TOOL=${{ matrix.tool }}
+        VARIANT=${{ matrix.variant }}
+      category: security-scan-${{ matrix.image }}
       event-name: ${{ github.event_name }}
       repository-private: ${{ github.event.repository.private }}
 ```

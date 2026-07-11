@@ -20,6 +20,13 @@ name: Docker Security Build
         description: Multiline Docker build arguments.
         type: string
         default: ""
+      category:
+        description: >-
+          SARIF category for the GitHub Security upload. Set a unique value
+          per image when one repository scans multiple images, otherwise the
+          uploads overwrite each other. Empty means the codeql-action default.
+        type: string
+        default: ""
       event-name:
         description: Caller event name, usually github.event_name.
         type: string
@@ -103,6 +110,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
+          category: ${{ inputs.category }}
 
       - name: Trivy high and critical summary
         uses: aquasecurity/trivy-action@v0.36.0
