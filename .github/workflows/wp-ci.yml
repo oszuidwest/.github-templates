@@ -54,6 +54,7 @@ jobs:
             plugin_review_phpcs
             file_type
             plugin_readme
+            plugin_updater
 
   translations:
     name: Translations
