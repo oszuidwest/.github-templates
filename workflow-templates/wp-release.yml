@@ -12,6 +12,10 @@ name: Release
 permissions:
   contents: read
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     uses: oszuidwest/.github-templates/.github/workflows/wp-release.yml@v2

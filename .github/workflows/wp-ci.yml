@@ -1,10 +1,64 @@
 ---
-# Strict shape: zero inputs. PHP matrix, plugin-check, and i18n behavior are
-# fixed; the i18n job auto-detects via languages/*.pot.
+# PHP linting, static analysis, Plugin Check, and optional i18n validation.
 name: WP CI
 
 "on":
   workflow_call:
+    inputs:
+      composer-audit:
+        description: 'Run composer audit once on PHP 8.4.'
+        type: boolean
+        default: false
+      strict-composer-validation:
+        description: 'Pass --strict to composer validate.'
+        type: boolean
+        default: false
+      exact-pot-validation:
+        description: >-
+          Compare the complete generated POT after removing volatile headers.
+        type: boolean
+        default: false
+      pot-include:
+        description: 'Comma-separated paths included by wp i18n make-pot.'
+        type: string
+        default: ''
+      pot-exclude:
+        description: 'Comma-separated paths excluded by wp i18n make-pot.'
+        type: string
+        default: ''
+      plugin-check-build-dir:
+        description: 'Plugin build directory passed to Plugin Check.'
+        type: string
+        default: './'
+      plugin-check-slug:
+        description: 'Plugin slug override passed to Plugin Check.'
+        type: string
+        default: ''
+      plugin-check-exclude-files:
+        description: 'Newline-separated files excluded from Plugin Check.'
+        type: string
+        default: ''
+      plugin-check-exclude-directories:
+        description: 'Newline-separated directories excluded from Plugin Check.'
+        type: string
+        default: ''
+      plugin-check-exclude-checks:
+        description: 'Newline-separated Plugin Check checks to exclude.'
+        type: string
+        default: |-
+          late_escaping
+          plugin_review_phpcs
+          file_type
+          plugin_readme
+          plugin_updater
+      php-timeout-minutes:
+        description: 'Timeout for each PHP matrix job.'
+        type: number
+        default: 15
+      translations-timeout-minutes:
+        description: 'Timeout for the translations job.'
+        type: number
+        default: 10
 
 permissions:
   contents: read
@@ -13,6 +67,9 @@ jobs:
   php:
     name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.php-timeout-minutes }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     strategy:
       fail-fast: false
       matrix:
@@ -28,13 +85,29 @@ jobs:
           tools: composer:v2, cs2pr
 
       - name: Validate PHP syntax
-        run: find . -maxdepth 1 -name '*.php' -exec php --syntax-check {} +
+        run: >-
+          find . -path './vendor' -prune -o -path './node_modules' -prune -o
+          -path './build' -prune -o -path './dist' -prune -o
+          -name '*.php' -type f -print0 | xargs -0 -n1 php --syntax-check
 
       - name: Validate composer.json
-        run: composer validate --no-check-publish
+        env:
+          STRICT: ${{ inputs.strict-composer-validation }}
+        run: |
+          args=(--no-check-publish)
+          if [ "$STRICT" = "true" ]; then
+            args+=(--strict)
+          fi
+          composer validate "${args[@]}"
 
       - name: Install dependencies
-        run: composer install --no-progress --prefer-dist --optimize-autoloader
+        run: >-
+          composer install --no-progress --prefer-dist --no-interaction
+          --optimize-autoloader
+
+      - name: Audit Composer dependencies
+        if: inputs.composer-audit && matrix.php == '8.4'
+        run: composer audit --locked --no-interaction
 
       - name: PHP_CodeSniffer
         run: |
@@ -49,16 +122,17 @@ jobs:
         if: matrix.php == '8.4'
         uses: wordpress/plugin-check-action@v1
         with:
-          exclude-checks: |
-            late_escaping
-            plugin_review_phpcs
-            file_type
-            plugin_readme
-            plugin_updater
+          build-dir: ${{ inputs.plugin-check-build-dir }}
+          slug: ${{ inputs.plugin-check-slug }}
+          exclude-files: ${{ inputs.plugin-check-exclude-files }}
+          exclude-directories: >-
+            ${{ inputs.plugin-check-exclude-directories }}
+          exclude-checks: ${{ inputs.plugin-check-exclude-checks }}
 
   translations:
     name: Translations
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.translations-timeout-minutes }}
     steps:
       - uses: actions/checkout@v7
 
@@ -89,18 +163,40 @@ jobs:
       - name: Verify POT is up-to-date
         if: steps.detect.outputs.has_pot == 'true'
         env:
+          EXACT: ${{ inputs.exact-pot-validation }}
           POT_FILE: ${{ steps.detect.outputs.pot_file }}
+          POT_INCLUDE: ${{ inputs.pot-include }}
+          POT_EXCLUDE: ${{ inputs.pot-exclude }}
           SLUG: ${{ steps.detect.outputs.slug }}
         run: |
-          NEW_POT="languages/${SLUG}-new.pot"
-          wp i18n make-pot . "$NEW_POT" \
-            --slug="$SLUG" --domain="$SLUG" --skip-audit
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          NEW_POT="$tmp/generated.pot"
+          args=(--slug="$SLUG" --domain="$SLUG" --skip-audit)
+          if [ -n "$POT_INCLUDE" ]; then
+            args+=(--include="$POT_INCLUDE")
+          fi
+          if [ -n "$POT_EXCLUDE" ]; then
+            args+=(--exclude="$POT_EXCLUDE")
+          fi
+          wp i18n make-pot . "$NEW_POT" "${args[@]}"
+
+          if [ "$EXACT" = "true" ]; then
+            sed -E '/POT-Creation-Date:|X-Generator:/d' \
+              "$POT_FILE" > "$tmp/committed.stripped"
+            sed -E '/POT-Creation-Date:|X-Generator:/d' \
+              "$NEW_POT" > "$tmp/generated.stripped"
+            diff -u "$tmp/committed.stripped" "$tmp/generated.stripped"
+            echo "The complete POT file is up to date."
+            exit 0
+          fi
+
           comm -13 \
             <(grep "^msgid " "$POT_FILE" | sort) \
-            <(grep "^msgid " "$NEW_POT" | sort) > /tmp/missing.txt
-          if [ -s /tmp/missing.txt ]; then
+            <(grep "^msgid " "$NEW_POT" | sort) > "$tmp/missing.txt"
+          if [ -s "$tmp/missing.txt" ]; then
             echo "::error::Missing translation strings in $POT_FILE:"
-            cat /tmp/missing.txt
+            cat "$tmp/missing.txt"
             echo ""
             echo "Run: wp i18n make-pot . $POT_FILE --slug=$SLUG --domain=$SLUG"
             exit 1
