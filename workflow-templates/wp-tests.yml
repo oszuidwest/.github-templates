@@ -1,0 +1,43 @@
+---
+name: Tests
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - '**/*.php'
+      - '.github/workflows/wp-tests.yml'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'patchwork.json'
+      - 'phpunit.xml'
+      - 'phpunit.xml.dist'
+      - 'scripts/check-coverage.php'
+      - 'tests/**'
+  pull_request:
+    paths:
+      - '**/*.php'
+      - '.github/workflows/wp-tests.yml'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'patchwork.json'
+      - 'phpunit.xml'
+      - 'phpunit.xml.dist'
+      - 'scripts/check-coverage.php'
+      - 'tests/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-tests.yml@v2
+    # Enable when composer.json defines a coverage script that writes
+    # coverage.xml. The threshold remains consumer-owned.
+    # with:
+    #   coverage-php: '8.4'

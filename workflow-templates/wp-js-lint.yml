@@ -5,6 +5,7 @@ name: JS Lint
   push:
     branches: [main]
     paths:
+      - '.github/workflows/wp-js-lint.yml'
       - '**/*.js'
       - '**/*.ts'
       - '**/*.css'
@@ -13,6 +14,7 @@ name: JS Lint
       - 'biome.json'
   pull_request:
     paths:
+      - '.github/workflows/wp-js-lint.yml'
       - '**/*.js'
       - '**/*.ts'
       - '**/*.css'
@@ -24,6 +26,12 @@ name: JS Lint
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     uses: oszuidwest/.github-templates/.github/workflows/wp-js-ci.yml@v2
+    with:
+      npm-audit: true

@@ -1,28 +1,64 @@
 ---
-# Strict shape: zero inputs. Node 24, npm ci, npm run lint.
-# Convention: consumer's package.json defines the lint script (typically biome).
+# Node-based WordPress plugin quality checks.
 name: WP JS CI
 
 "on":
   workflow_call:
+    inputs:
+      node-version:
+        description: 'Node version used when node-version-file is empty.'
+        type: string
+        default: '24'
+      node-version-file:
+        description: 'Optional Node version file, for example .nvmrc.'
+        type: string
+        default: ''
+      npm-audit:
+        description: 'Fail on high or critical npm advisories.'
+        type: boolean
+        default: false
+      lint-command:
+        description: 'Command used to lint and build JavaScript assets.'
+        type: string
+        default: 'npm run lint'
+      timeout-minutes:
+        description: 'Job timeout in minutes.'
+        type: number
+        default: 15
 
 permissions:
   contents: read
 
 jobs:
   lint:
-    name: Biome
+    name: Lint, build, and audit
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - name: Setup Node from version input
+        if: inputs.node-version-file == ''
+        uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Setup Node from version file
+        if: inputs.node-version-file != ''
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit npm dependencies
+        if: inputs.npm-audit
+        run: npm audit --audit-level=high
+
       - name: Lint
-        run: npm run lint
+        env:
+          LINT_COMMAND: ${{ inputs.lint-command }}
+        run: bash -euo pipefail -c "$LINT_COMMAND"

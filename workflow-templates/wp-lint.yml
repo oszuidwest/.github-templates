@@ -6,6 +6,7 @@ name: Lint
     branches: [main]
     paths:
       - '**/*.php'
+      - '.github/workflows/wp-lint.yml'
       - 'composer.json'
       - 'composer.lock'
       - 'phpcs.xml'
@@ -16,6 +17,7 @@ name: Lint
   pull_request:
     paths:
       - '**/*.php'
+      - '.github/workflows/wp-lint.yml'
       - 'composer.json'
       - 'composer.lock'
       - 'phpcs.xml'
@@ -28,6 +30,14 @@ name: Lint
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v2
+    with:
+      composer-audit: true
+      exact-pot-validation: true
+      strict-composer-validation: true

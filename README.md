@@ -12,6 +12,11 @@ Shared GitHub Actions for repositories at oszuidwest. Two delivery models:
 cp workflow-templates/docker-quality.yml   .github/workflows/
 cp workflow-templates/docker-security.yml  .github/workflows/
 cp workflow-templates/shell-quality.yml    .github/workflows/
+cp workflow-templates/workflow-quality.yml .github/workflows/
+cp workflow-templates/wp-lint.yml           .github/workflows/
+cp workflow-templates/wp-js-lint.yml        .github/workflows/
+cp workflow-templates/wp-tests.yml          .github/workflows/
+cp workflow-templates/wp-release.yml        .github/workflows/
 
 # Config
 cp config-templates/.hadolint.yaml         ./
@@ -24,6 +29,11 @@ cp config-templates/phpcs.xml.dist         ./   # WordPress plugin baseline
 | docker-quality | Dockerfile, YAML and Compose linting | Lint errors |
 | docker-security | Thin caller for centralized Trivy scanning | Never; reports only |
 | shell-quality | ShellCheck (only on .sh changes) | Lint errors |
+| workflow-quality | GitHub Actions syntax validation | Actionlint errors |
+| wp-lint | PHP, static analysis, Plugin Check and translations | Quality errors |
+| wp-js-lint | npm audit plus the consumer's lint/build command | Quality errors |
+| wp-tests | PHPUnit matrix with optional coverage | Test or coverage errors |
+| wp-release | Thin caller for centralized WordPress releases | Release errors |
 
 ### Customization
 
@@ -335,7 +345,10 @@ Inputs:
 
 ### `wp-ci.yml` - WordPress plugin lint
 
-Strict shape, no inputs. PHP matrix `["8.3", "8.4"]`, fixed `wp-plugin-check` excludes, optional translations job that auto-runs when `languages/*.pot` exists.
+PHP matrix `["8.3", "8.4"]` with recursive syntax validation, Composer,
+PHP_CodeSniffer, PHPStan, Plugin Check, and an optional translations job that
+auto-runs when `languages/*.pot` exists. Existing v2 behavior remains the
+default; stricter validation and dependency auditing are opt-in.
 
 ```yaml
 name: Lint
@@ -347,17 +360,45 @@ permissions: { contents: read }
 jobs:
   lint:
     uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v2
+    with:
+      composer-audit: true
+      exact-pot-validation: true
+      strict-composer-validation: true
 ```
 
-The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check excludes are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`. Plugins that fail other checks fix it in code rather than configuring the workflow.
+The `php` job runs recursive `php --syntax-check`, `composer validate`,
+`composer install`, `phpcs` (checkstyle/cs2pr), `phpstan`
+(checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4.
+Plugin Check inputs allow consumers to provide their slug, build directory,
+and project-specific file or directory exclusions while retaining the shared
+default check exclusions.
 
 The `translations` job auto-detects `languages/*.pot`, runs `wp i18n make-pot` against a fresh copy, and fails on missing strings. Slug and domain are derived from the POT filename (e.g. `languages/foo.pot` -> slug+domain `foo`).
 
 Consumer requirements: `composer.json` declares `phpcs` and `phpstan` as dev dependencies; `phpcs.xml` (or `phpcs.xml.dist`) and `phpstan.neon` exist at repo root.
 
+Inputs:
+
+| Input | Type | Default | Notes |
+|-------|------|---------|-------|
+| `composer-audit` | boolean | `false` | Runs `composer audit --locked` once on PHP 8.4. |
+| `strict-composer-validation` | boolean | `false` | Adds `--strict` to `composer validate`. |
+| `exact-pot-validation` | boolean | `false` | Diffs the complete POT after removing volatile headers. |
+| `pot-include` | string | `''` | Comma-separated paths included by `wp i18n make-pot`. |
+| `pot-exclude` | string | `''` | Comma-separated paths excluded by `wp i18n make-pot`. |
+| `plugin-check-build-dir` | string | `./` | Plugin build directory passed to Plugin Check. |
+| `plugin-check-slug` | string | `''` | Plugin slug override passed to Plugin Check. |
+| `plugin-check-exclude-files` | string | `''` | Newline-separated excluded files. |
+| `plugin-check-exclude-directories` | string | `''` | Newline-separated excluded directories. |
+| `plugin-check-exclude-checks` | string | shared list | Overrides the shared excluded checks. |
+| `php-timeout-minutes` | number | `15` | Timeout for each PHP matrix job. |
+| `translations-timeout-minutes` | number | `10` | Timeout for the translations job. |
+
 ### `wp-js-ci.yml` - WordPress plugin JS lint
 
-Strict shape, no inputs. Node 24, `npm ci`, `npm run lint`. Convention: consumer's `package.json` defines `lint` (typically `biome check assets/`).
+Runs `npm ci` followed by an optional high-severity audit and the consumer's
+lint/build command. Node 24 remains the default; consumers can instead use a
+version file such as `.nvmrc`.
 
 ```yaml
 name: JS Lint
@@ -369,7 +410,50 @@ permissions: { contents: read }
 jobs:
   lint:
     uses: oszuidwest/.github-templates/.github/workflows/wp-js-ci.yml@v2
+    with:
+      npm-audit: true
 ```
+
+Inputs:
+
+| Input | Type | Default | Notes |
+|-------|------|---------|-------|
+| `node-version` | string | `24` | Used when `node-version-file` is empty. |
+| `node-version-file` | string | `''` | Optional file such as `.nvmrc`. |
+| `npm-audit` | boolean | `false` | Fails on high or critical npm advisories. |
+| `lint-command` | string | `npm run lint` | Consumer lint/build command. |
+| `timeout-minutes` | number | `15` | Job timeout. |
+
+### `wp-tests.yml` - WordPress plugin PHPUnit
+
+Runs a configurable PHP matrix. Coverage is disabled by default; set
+`coverage-php` to run the consumer's coverage command on one PHP version and
+upload the resulting report.
+
+```yaml
+name: Tests
+"on":
+  push: { branches: [main], paths: ['**/*.php', 'composer.*', 'tests/**'] }
+  pull_request: { paths: ['**/*.php', 'composer.*', 'tests/**'] }
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  phpunit:
+    uses: oszuidwest/.github-templates/.github/workflows/wp-tests.yml@v2
+    with:
+      coverage-php: '8.4'
+```
+
+Inputs:
+
+| Input | Type | Default | Notes |
+|-------|------|---------|-------|
+| `php-versions` | string | `["8.3", "8.4"]` | JSON PHP version array. |
+| `test-command` | string | `composer test` | Regular test command. |
+| `coverage-php` | string | `''` | Matrix version used for coverage; empty disables it. |
+| `coverage-command` | string | `composer coverage` | Coverage command. |
+| `coverage-artifact` | string | `coverage.xml` | Uploaded report path. |
+| `timeout-minutes` | number | `15` | Timeout for each matrix job. |
 
 ### `wp-release.yml` - WordPress plugin release
 
@@ -409,14 +493,17 @@ Outputs:
 | `version` | Version extracted from the plugin header. |
 | `released` | `'true'` when a GitHub release was created, `'false'` when skipped. |
 
-**Fixed shape (no inputs):**
+**Fixed release behavior:**
 
 - Version regex: `^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`. Pre-release versions (`X.Y.Z-beta.N`, etc.) are auto-marked `prerelease` on the GitHub release.
-- Production build: PHP 8.3 + `composer install --no-dev --optimize-autoloader`.
+- Production build: PHP 8.3 + a non-interactive optimized Composer install.
 - Translations: `msgfmt` runs over `languages/*.po` when any exist. `vendor/` and the compiled `.mo` files are bundled into the zip.
 - rsync exclude list (kept identical across consumers): `release/`, `.git/`, `.github/`, `.claude/`, `node_modules/`, `composer.json`, `composer.lock`, `package.json`, `package-lock.json`, `biome.json`, `phpcs.xml`, `phpcs.xml.dist`, `phpstan.neon`, `phpstan-bootstrap.php`, `phpstan-bootstrap.stub`, `*.log`, `.gitignore`, `CLAUDE.md`, `AGENTS.md`, `.DS_Store`. `vendor/` and `README.md` are kept in the zip.
 
-The release job tags the current commit, builds `<slug>-<version>.zip`, and creates a GitHub release with `--generate-notes`. If the latest tag already matches the header version and `force` is `false`, the workflow exits with a notice and the `released` output is `'false'`.
+The release job tags the current commit, builds `<slug>-<version>.zip`, creates
+a SHA-256 checksum, and publishes both files with generated release notes. If
+the latest tag already matches the header version and `force` is `false`, the
+workflow exits with a notice and the `released` output is `'false'`.
 
 The `plugin-slug` input exists for plugins where the slug currently differs from the repo name (`zw-cacheman` -> `zuidwest-cache-manager`, `zw-liveblog` -> `zuidwest-liveblog`, `zw-gr26-wp` -> `zw-gr26`). Those plugins have open rename issues; once landed, they can drop the override.
 

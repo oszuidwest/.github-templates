@@ -1,0 +1,80 @@
+---
+name: WP Tests
+
+"on":
+  workflow_call:
+    inputs:
+      php-versions:
+        description: 'JSON array of PHP versions to test.'
+        type: string
+        default: '["8.3", "8.4"]'
+      test-command:
+        description: 'Command used for regular test runs.'
+        type: string
+        default: 'composer test'
+      coverage-php:
+        description: 'PHP version that runs coverage; empty disables coverage.'
+        type: string
+        default: ''
+      coverage-command:
+        description: 'Command used for the coverage run.'
+        type: string
+        default: 'composer coverage'
+      coverage-artifact:
+        description: 'Coverage report uploaded as an artifact.'
+        type: string
+        default: 'coverage.xml'
+      timeout-minutes:
+        description: 'Timeout for each matrix job.'
+        type: number
+        default: 15
+
+permissions:
+  contents: read
+
+jobs:
+  phpunit:
+    name: PHPUnit (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ${{ fromJSON(inputs.php-versions) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: >-
+            ${{ matrix.php == inputs.coverage-php && 'xdebug' || 'none' }}
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Run tests
+        if: matrix.php != inputs.coverage-php
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: bash -euo pipefail -c "$TEST_COMMAND"
+
+      - name: Run tests with coverage
+        if: inputs.coverage-php != '' && matrix.php == inputs.coverage-php
+        env:
+          COVERAGE_COMMAND: ${{ inputs.coverage-command }}
+        run: bash -euo pipefail -c "$COVERAGE_COMMAND"
+
+      - name: Upload coverage report
+        if: >-
+          inputs.coverage-php != '' &&
+          matrix.php == inputs.coverage-php &&
+          !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: php-coverage-${{ matrix.php }}
+          path: ${{ inputs.coverage-artifact }}
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,42 @@
+---
+name: Workflow syntax
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - 'workflow-templates/**'
+  pull_request:
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/**'
+      - 'workflow-templates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.x'
+          cache: false
+
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Validate workflows
+        run: actionlint -color .github/workflows/*.yml workflow-templates/*.yml
