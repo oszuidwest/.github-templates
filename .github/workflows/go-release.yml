@@ -168,7 +168,7 @@ jobs:
         # HEAD, not github.sha: the previous step may have checked out the tag.
         run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: 'go.mod'
           cache: true
