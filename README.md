@@ -346,10 +346,15 @@ name: Lint
 permissions: { contents: read }
 jobs:
   lint:
+    permissions:
+      contents: read
+      pull-requests: write
     uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v2
 ```
 
-The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check excludes are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`. Plugins that fail other checks fix it in code rather than configuring the workflow.
+The caller grants `pull-requests: write` to the reusable workflow so Plugin Check can publish or update its pull-request result comment. The called workflow keeps this permission on the `php` job; the separate `translations` job remains read-only.
+
+The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check excludes are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. Plugins that fail other checks fix it in code rather than configuring the workflow.
 
 The `translations` job auto-detects `languages/*.pot`, runs `wp i18n make-pot` against a fresh copy, and fails on missing strings. Slug and domain are derived from the POT filename (e.g. `languages/foo.pot` -> slug+domain `foo`).
 

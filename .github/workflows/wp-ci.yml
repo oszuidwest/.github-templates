@@ -12,6 +12,9 @@ permissions:
 jobs:
   php:
     name: PHP ${{ matrix.php }}
+    permissions:
+      contents: read
+      pull-requests: write
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
