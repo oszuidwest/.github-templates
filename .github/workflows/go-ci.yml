@@ -22,6 +22,10 @@ name: Go CI
           Only "bun" is supported in v1.
         type: string
         default: 'bun'
+      enable-deadcode:
+        description: 'Run deadcode analysis'
+        type: boolean
+        default: true
       deadcode-version:
         description: >-
           Override deadcode version. Empty = use version pinned in
@@ -113,13 +117,17 @@ jobs:
           echo "  govulncheck=$govulncheck_v"
           echo "  staticcheck=$staticcheck_v"
 
-      - name: Install Go analysis tools
+      - name: Install deadcode
+        if: inputs.enable-deadcode
         env:
           DEADCODE_VERSION: ${{ steps.tool_versions.outputs.deadcode }}
+        run: go install "golang.org/x/tools/cmd/deadcode@${DEADCODE_VERSION}"
+
+      - name: Install Go analysis tools
+        env:
           GOVULNCHECK_VERSION: ${{ steps.tool_versions.outputs.govulncheck }}
           STATICCHECK_VERSION: ${{ steps.tool_versions.outputs.staticcheck }}
         run: |
-          go install "golang.org/x/tools/cmd/deadcode@${DEADCODE_VERSION}"
           go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
           go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
 
@@ -128,6 +136,7 @@ jobs:
       # platform is not a false positive. Trade-off: dead production code
       # that still has tests is not reported.
       - name: Check for dead code
+        if: inputs.enable-deadcode
         run: |
           deadcode_output=$(deadcode -test ./...)
           if [ -n "$deadcode_output" ]; then
