@@ -197,19 +197,22 @@ jobs:
   ci:
     uses: oszuidwest/.github-templates/.github/workflows/go-ci.yml@v2
     with:
-      golangci-lint-version: v2.12.1
+      golangci-lint-version: v2.13.0
 ```
 
 Inputs:
 
 | Input | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `golangci-lint-version` | string | no | `v2.12.1` | Passed to `golangci/golangci-lint-action`. |
+| `golangci-lint-version` | string | no | `v2.13.0` | Passed to `golangci/golangci-lint-action`. |
 | `go-version-file` | string | no | `go.mod` | Passed to `actions/setup-go`. |
 | `enable-frontend` | boolean | no | `false` | Adds the frontend lint job. |
 | `frontend-tool` | string | no | `bun` | Only `bun` is supported. |
+| `deadcode-version` | string | no | `''` | Empty uses the `golang.org/x/tools` version in `tools/go.mod`. |
+| `govulncheck-version` | string | no | `''` | Empty uses the `golang.org/x/vuln` version in `tools/go.mod`. |
+| `staticcheck-version` | string | no | `''` | Empty uses the `honnef.co/go/tools` version in `tools/go.mod`. |
 
-The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, `govulncheck`, and `staticcheck`. Consumers must keep `deadcode`, `govulncheck`, and `staticcheck` available through Go tool directives in `go.mod`.
+The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, `govulncheck`, and `staticcheck`. By default, the reusable workflow resolves and installs `deadcode`, `govulncheck`, and `staticcheck` from this repository's `tools/go.mod`; consumers can override those versions through the corresponding inputs without adding tool directives to their own module.
 
 ### `go-release.yml` - Go release
 
