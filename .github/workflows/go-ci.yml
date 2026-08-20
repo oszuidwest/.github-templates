@@ -7,7 +7,7 @@ name: Go CI
       golangci-lint-version:
         description: 'golangci-lint version (pinned, no v-prefix stripping)'
         type: string
-        default: 'v2.12.1'
+        default: 'v2.13.0'
       go-version-file:
         description: 'Path to file used by setup-go to derive Go version'
         type: string
