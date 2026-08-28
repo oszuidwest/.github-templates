@@ -3,7 +3,7 @@
 Shared GitHub Actions for repositories at oszuidwest. Two delivery models:
 
 - **Copy-paste templates** (`workflow-templates/`, `config-templates/`) - drop-in files. Use for project-shaped pieces (Dockerfile linting, Trivy scan, shellcheck) where the consumer barely customizes.
-- **Reusable workflows** (`.github/workflows/`) - called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@v2`. Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
+- **Reusable workflows** (`.github/workflows/`) - called via `uses: oszuidwest/.github-templates/.github/workflows/<name>.yml@v3`. Use for the larger Go CI/release/Docker pipeline where parameterization replaces copy-paste drift.
 
 ## Copy-paste templates
 
@@ -84,7 +84,7 @@ permissions:
   security-events: write
 jobs:
   security:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v3
     with:
       event-name: ${{ github.event_name }}
       repository-private: ${{ github.event.repository.private }}
@@ -111,7 +111,7 @@ Example for a non-root Dockerfile with build args:
 ```yaml
 jobs:
   security:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v3
     with:
       dockerfile-path: docker/Dockerfile
       build-args: |
@@ -136,7 +136,7 @@ jobs:
         include:
           - { image: odr-padenc, tool: odr-padenc, variant: "" }
           - { image: odr-audioenc-full, tool: odr-audioenc, variant: full }
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v3
     with:
       dockerfile-path: docker/Dockerfile
       build-args: |
@@ -169,7 +169,7 @@ jobs:
 
   security:
     needs: images
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-images.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-images.yml@v3
     with:
       images-json: ${{ needs.images.outputs.images-json }}
       event-name: ${{ github.event_name }}
@@ -195,25 +195,19 @@ name: CI
 permissions: { contents: read }
 jobs:
   ci:
-    uses: oszuidwest/.github-templates/.github/workflows/go-ci.yml@v2
-    with:
-      golangci-lint-version: v2.13.2
+    uses: oszuidwest/.github-templates/.github/workflows/go-ci.yml@v3
 ```
 
 Inputs:
 
 | Input | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `golangci-lint-version` | string | no | `v2.13.2` | Passed to `golangci/golangci-lint-action`. |
 | `go-version-file` | string | no | `go.mod` | Passed to `actions/setup-go`. |
 | `enable-frontend` | boolean | no | `false` | Adds the frontend lint job. |
 | `frontend-tool` | string | no | `bun` | Only `bun` is supported. |
 | `enable-deadcode` | boolean | no | `true` | Installs and runs deadcode analysis. |
-| `deadcode-version` | string | no | `''` | Empty uses the `golang.org/x/tools` version in `tools/go.mod`. |
-| `govulncheck-version` | string | no | `''` | Empty uses the `golang.org/x/vuln` version in `tools/go.mod`. |
-| `staticcheck-version` | string | no | `''` | Deprecated compatibility input; ignored. Staticcheck runs through golangci-lint. |
 
-The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, and `govulncheck`. Staticcheck is available through golangci-lint and is controlled by each consumer's linter configuration, avoiding a duplicate standalone installation and scan. By default, the reusable workflow resolves and installs `deadcode` and `govulncheck` from this repository's `tools/go.mod`; consumers can override those versions through the corresponding inputs without adding tool directives to their own module.
+The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, and `govulncheck`. Staticcheck is available through golangci-lint and is controlled by each consumer's linter configuration, avoiding a duplicate standalone installation and scan. Analysis tool versions are managed centrally by this repository and cannot be overridden by consumers.
 
 `enable-deadcode: false` skips only deadcode installation and execution; use it only as a temporary escape hatch for an upstream analysis regression. `govulncheck` and the golangci-lint suite remain enabled.
 
@@ -230,7 +224,7 @@ permissions:
   contents: read
 jobs:
   release:
-    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v3
     with:
       project-name: zwfm-metadata
       ldflags-target: zwfm-metadata/utils
@@ -280,7 +274,7 @@ v2 dropped the nested docker job. Compose with `docker-publish.yml` from a secon
 ```yaml
 jobs:
   release:
-    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v3
     with:
       project-name: zwfm-metadata
       ldflags-target: zwfm-metadata/utils
@@ -292,7 +286,7 @@ jobs:
   docker:
     needs: release
     if: needs.release.outputs.is_release == 'true'
-    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v3
     with:
       version: ${{ needs.release.outputs.version }}
       image-labels: |
@@ -316,7 +310,7 @@ name: Publish Docker
 permissions: { contents: read }
 jobs:
   publish:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/docker-publish.yml@v3
     with:
       version: ${{ github.ref_name }}
     permissions:
@@ -355,7 +349,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v3
 ```
 
 The caller grants `pull-requests: write` to the reusable workflow so Plugin Check can publish or update its pull-request result comment. The called workflow keeps this permission on the `php` job; the separate `translations` job remains read-only.
@@ -379,7 +373,7 @@ name: JS Lint
 permissions: { contents: read }
 jobs:
   lint:
-    uses: oszuidwest/.github-templates/.github/workflows/wp-js-ci.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/wp-js-ci.yml@v3
 ```
 
 ### `wp-release.yml` - WordPress plugin release
@@ -398,7 +392,7 @@ name: Release
 permissions: { contents: read }
 jobs:
   release:
-    uses: oszuidwest/.github-templates/.github/workflows/wp-release.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/wp-release.yml@v3
     with:
       force: ${{ inputs.force }}
       # plugin-slug: zuidwest-cache-manager  # override only if slug != repo name
@@ -452,7 +446,7 @@ jobs:
 
   release:
     needs: pre-release
-    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v2
+    uses: oszuidwest/.github-templates/.github/workflows/go-release.yml@v3
     with:
       project-name: my-service
       ldflags-target: github.com/org/my-service/version

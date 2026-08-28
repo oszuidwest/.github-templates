@@ -4,10 +4,6 @@ name: Go CI
 "on":
   workflow_call:
     inputs:
-      golangci-lint-version:
-        description: 'golangci-lint version (pinned, no v-prefix stripping)'
-        type: string
-        default: 'v2.13.2'
       go-version-file:
         description: 'Path to file used by setup-go to derive Go version'
         type: string
@@ -26,24 +22,6 @@ name: Go CI
         description: 'Run deadcode analysis'
         type: boolean
         default: true
-      deadcode-version:
-        description: >-
-          Override deadcode version. Empty = use version pinned in
-          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
-        type: string
-        default: ''
-      govulncheck-version:
-        description: >-
-          Override govulncheck version. Empty = use version pinned in
-          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
-        type: string
-        default: ''
-      staticcheck-version:
-        description: >-
-          Deprecated compatibility input. Staticcheck runs through
-          golangci-lint.
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -61,7 +39,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: oszuidwest/.github-templates
-          ref: v2
+          ref: v3
           path: .tool-pins
           sparse-checkout: tools
           sparse-checkout-cone-mode: false
@@ -88,7 +66,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: ${{ inputs.golangci-lint-version }}
+          version: v2.13.2
           args: --timeout=5m
 
       - name: Resolve analysis tool versions
@@ -96,15 +74,13 @@ jobs:
         working-directory: .tool-pins/tools
         env:
           GOTOOLCHAIN: auto
-          DEADCODE_OVERRIDE: ${{ inputs.deadcode-version }}
-          GOVULNCHECK_OVERRIDE: ${{ inputs.govulncheck-version }}
         run: |
           mod_v() {
             go list -m -f '{{.Version}}' "$1"
           }
 
-          deadcode_v="${DEADCODE_OVERRIDE:-$(mod_v golang.org/x/tools)}"
-          govulncheck_v="${GOVULNCHECK_OVERRIDE:-$(mod_v golang.org/x/vuln)}"
+          deadcode_v=$(mod_v golang.org/x/tools)
+          govulncheck_v=$(mod_v golang.org/x/vuln)
           {
             echo "deadcode=$deadcode_v"
             echo "govulncheck=$govulncheck_v"
