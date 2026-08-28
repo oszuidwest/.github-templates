@@ -213,7 +213,7 @@ Inputs:
 | `govulncheck-version` | string | no | `''` | Empty uses the `golang.org/x/vuln` version in `tools/go.mod`. |
 | `staticcheck-version` | string | no | `''` | Deprecated compatibility input; ignored. Staticcheck runs through golangci-lint. |
 
-The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, and `govulncheck`. Staticcheck is enabled through golangci-lint, avoiding a duplicate standalone installation and scan. By default, the reusable workflow resolves and installs `deadcode` and `govulncheck` from this repository's `tools/go.mod`; consumers can override those versions through the corresponding inputs without adding tool directives to their own module.
+The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, and `govulncheck`. A separate Staticcheck-only golangci-lint invocation keeps that check enabled independently of consumer configuration without installing the standalone Staticcheck tool. By default, the reusable workflow resolves and installs `deadcode` and `govulncheck` from this repository's `tools/go.mod`; consumers can override those versions through the corresponding inputs without adding tool directives to their own module.
 
 `enable-deadcode: false` skips only deadcode installation and execution; use it only as a temporary escape hatch for an upstream analysis regression. `govulncheck` and the golangci-lint suite remain enabled.
 
