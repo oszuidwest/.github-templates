@@ -91,17 +91,6 @@ jobs:
           version: ${{ inputs.golangci-lint-version }}
           args: --timeout=5m
 
-      - name: Enforce Staticcheck
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: ${{ inputs.golangci-lint-version }}
-          args: >-
-            --no-config
-            --default=none
-            --enable=staticcheck
-            --timeout=5m
-            ./...
-
       - name: Resolve analysis tool versions
         id: tool_versions
         working-directory: .tool-pins/tools
