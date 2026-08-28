@@ -27,12 +27,12 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Ignore rules live in .hadolint.yaml - do not duplicate here.
       - name: Hadolint
         if: ${{ hashFiles(env.DOCKERFILE_PATH) != '' }}
-        uses: hadolint/hadolint-action@v3.3.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: ${{ env.DOCKERFILE_PATH }}
 

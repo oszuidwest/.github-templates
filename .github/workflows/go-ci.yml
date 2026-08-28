@@ -4,10 +4,6 @@ name: Go CI
 "on":
   workflow_call:
     inputs:
-      golangci-lint-version:
-        description: 'golangci-lint version (pinned, no v-prefix stripping)'
-        type: string
-        default: 'v2.13.0'
       go-version-file:
         description: 'Path to file used by setup-go to derive Go version'
         type: string
@@ -26,24 +22,6 @@ name: Go CI
         description: 'Run deadcode analysis'
         type: boolean
         default: true
-      deadcode-version:
-        description: >-
-          Override deadcode version. Empty = use version pinned in
-          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
-        type: string
-        default: ''
-      govulncheck-version:
-        description: >-
-          Override govulncheck version. Empty = use version pinned in
-          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
-        type: string
-        default: ''
-      staticcheck-version:
-        description: >-
-          Override staticcheck version. Empty = use version pinned in
-          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -61,7 +39,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: oszuidwest/.github-templates
-          ref: v2
+          ref: v3
           path: .tool-pins
           sparse-checkout: tools
           sparse-checkout-cone-mode: false
@@ -88,7 +66,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: ${{ inputs.golangci-lint-version }}
+          version: v2.13.2
           args: --timeout=5m
 
       - name: Resolve analysis tool versions
@@ -96,26 +74,20 @@ jobs:
         working-directory: .tool-pins/tools
         env:
           GOTOOLCHAIN: auto
-          DEADCODE_OVERRIDE: ${{ inputs.deadcode-version }}
-          GOVULNCHECK_OVERRIDE: ${{ inputs.govulncheck-version }}
-          STATICCHECK_OVERRIDE: ${{ inputs.staticcheck-version }}
         run: |
           mod_v() {
             go list -m -f '{{.Version}}' "$1"
           }
 
-          deadcode_v="${DEADCODE_OVERRIDE:-$(mod_v golang.org/x/tools)}"
-          govulncheck_v="${GOVULNCHECK_OVERRIDE:-$(mod_v golang.org/x/vuln)}"
-          staticcheck_v="${STATICCHECK_OVERRIDE:-$(mod_v honnef.co/go/tools)}"
+          deadcode_v=$(mod_v golang.org/x/tools)
+          govulncheck_v=$(mod_v golang.org/x/vuln)
           {
             echo "deadcode=$deadcode_v"
             echo "govulncheck=$govulncheck_v"
-            echo "staticcheck=$staticcheck_v"
           } >> "$GITHUB_OUTPUT"
           echo "Resolved:"
           echo "  deadcode=$deadcode_v"
           echo "  govulncheck=$govulncheck_v"
-          echo "  staticcheck=$staticcheck_v"
 
       - name: Install deadcode
         if: inputs.enable-deadcode
@@ -123,13 +95,12 @@ jobs:
           DEADCODE_VERSION: ${{ steps.tool_versions.outputs.deadcode }}
         run: go install "golang.org/x/tools/cmd/deadcode@${DEADCODE_VERSION}"
 
-      - name: Install Go analysis tools
+      - name: Install govulncheck
         env:
           GOVULNCHECK_VERSION: ${{ steps.tool_versions.outputs.govulncheck }}
-          STATICCHECK_VERSION: ${{ steps.tool_versions.outputs.staticcheck }}
-        run: |
-          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
-          go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
+        run: >-
+          go install
+          "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
 
       # -test counts test functions as reachability roots, so code that is
       # only reachable from platform-tagged files plus tests on this
@@ -146,9 +117,6 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
-
-      - name: Run staticcheck
-        run: staticcheck ./...
 
   frontend:
     name: Frontend
