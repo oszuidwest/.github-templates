@@ -7,7 +7,7 @@ name: Go CI
       golangci-lint-version:
         description: 'golangci-lint version (pinned, no v-prefix stripping)'
         type: string
-        default: 'v2.13.0'
+        default: 'v2.13.2'
       go-version-file:
         description: 'Path to file used by setup-go to derive Go version'
         type: string
@@ -40,8 +40,8 @@ name: Go CI
         default: ''
       staticcheck-version:
         description: >-
-          Override staticcheck version. Empty = use version pinned in
-          oszuidwest/.github-templates tools/go.mod (Dependabot-managed).
+          Deprecated compatibility input. Staticcheck runs through
+          golangci-lint.
         type: string
         default: ''
 
@@ -98,7 +98,6 @@ jobs:
           GOTOOLCHAIN: auto
           DEADCODE_OVERRIDE: ${{ inputs.deadcode-version }}
           GOVULNCHECK_OVERRIDE: ${{ inputs.govulncheck-version }}
-          STATICCHECK_OVERRIDE: ${{ inputs.staticcheck-version }}
         run: |
           mod_v() {
             go list -m -f '{{.Version}}' "$1"
@@ -106,16 +105,13 @@ jobs:
 
           deadcode_v="${DEADCODE_OVERRIDE:-$(mod_v golang.org/x/tools)}"
           govulncheck_v="${GOVULNCHECK_OVERRIDE:-$(mod_v golang.org/x/vuln)}"
-          staticcheck_v="${STATICCHECK_OVERRIDE:-$(mod_v honnef.co/go/tools)}"
           {
             echo "deadcode=$deadcode_v"
             echo "govulncheck=$govulncheck_v"
-            echo "staticcheck=$staticcheck_v"
           } >> "$GITHUB_OUTPUT"
           echo "Resolved:"
           echo "  deadcode=$deadcode_v"
           echo "  govulncheck=$govulncheck_v"
-          echo "  staticcheck=$staticcheck_v"
 
       - name: Install deadcode
         if: inputs.enable-deadcode
@@ -123,13 +119,12 @@ jobs:
           DEADCODE_VERSION: ${{ steps.tool_versions.outputs.deadcode }}
         run: go install "golang.org/x/tools/cmd/deadcode@${DEADCODE_VERSION}"
 
-      - name: Install Go analysis tools
+      - name: Install govulncheck
         env:
           GOVULNCHECK_VERSION: ${{ steps.tool_versions.outputs.govulncheck }}
-          STATICCHECK_VERSION: ${{ steps.tool_versions.outputs.staticcheck }}
-        run: |
-          go install "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
-          go install "honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}"
+        run: >-
+          go install
+          "golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}"
 
       # -test counts test functions as reachability roots, so code that is
       # only reachable from platform-tagged files plus tests on this
@@ -146,9 +141,6 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
-
-      - name: Run staticcheck
-        run: staticcheck ./...
 
   frontend:
     name: Frontend

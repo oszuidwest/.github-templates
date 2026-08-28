@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   security:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main  # yamllint disable-line rule:line-length
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2  # yamllint disable-line rule:line-length
     with:
       event-name: ${{ github.event_name }}
       repository-private: ${{ github.event.repository.private }}

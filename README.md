@@ -84,7 +84,7 @@ permissions:
   security-events: write
 jobs:
   security:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2
     with:
       event-name: ${{ github.event_name }}
       repository-private: ${{ github.event.repository.private }}
@@ -111,7 +111,7 @@ Example for a non-root Dockerfile with build args:
 ```yaml
 jobs:
   security:
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2
     with:
       dockerfile-path: docker/Dockerfile
       build-args: |
@@ -136,7 +136,7 @@ jobs:
         include:
           - { image: odr-padenc, tool: odr-padenc, variant: "" }
           - { image: odr-audioenc-full, tool: odr-audioenc, variant: full }
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@main
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-build.yml@v2
     with:
       dockerfile-path: docker/Dockerfile
       build-args: |
@@ -159,7 +159,7 @@ jobs:
     outputs:
       images-json: ${{ steps.images.outputs.images-json }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: images
         run: |
           IMAGE="$(awk '$2 ~ /^example:/ { print $2; exit }' docker-compose.yml)"
@@ -169,7 +169,7 @@ jobs:
 
   security:
     needs: images
-    uses: oszuidwest/.github-templates/.github/workflows/docker-security-images.yml@main
+    uses: oszuidwest/.github-templates/.github/workflows/docker-security-images.yml@v2
     with:
       images-json: ${{ needs.images.outputs.images-json }}
       event-name: ${{ github.event_name }}
@@ -197,25 +197,25 @@ jobs:
   ci:
     uses: oszuidwest/.github-templates/.github/workflows/go-ci.yml@v2
     with:
-      golangci-lint-version: v2.13.0
+      golangci-lint-version: v2.13.2
 ```
 
 Inputs:
 
 | Input | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `golangci-lint-version` | string | no | `v2.13.0` | Passed to `golangci/golangci-lint-action`. |
+| `golangci-lint-version` | string | no | `v2.13.2` | Passed to `golangci/golangci-lint-action`. |
 | `go-version-file` | string | no | `go.mod` | Passed to `actions/setup-go`. |
 | `enable-frontend` | boolean | no | `false` | Adds the frontend lint job. |
 | `frontend-tool` | string | no | `bun` | Only `bun` is supported. |
 | `enable-deadcode` | boolean | no | `true` | Installs and runs deadcode analysis. |
 | `deadcode-version` | string | no | `''` | Empty uses the `golang.org/x/tools` version in `tools/go.mod`. |
 | `govulncheck-version` | string | no | `''` | Empty uses the `golang.org/x/vuln` version in `tools/go.mod`. |
-| `staticcheck-version` | string | no | `''` | Empty uses the `honnef.co/go/tools` version in `tools/go.mod`. |
+| `staticcheck-version` | string | no | `''` | Deprecated compatibility input; ignored. Staticcheck runs through golangci-lint. |
 
-The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, `govulncheck`, and `staticcheck`. By default, the reusable workflow resolves and installs `deadcode`, `govulncheck`, and `staticcheck` from this repository's `tools/go.mod`; consumers can override those versions through the corresponding inputs without adding tool directives to their own module.
+The Go job runs `go test -race -shuffle=on -v ./...`, `go vet`, `go fmt` with diff check, golangci-lint, `deadcode`, and `govulncheck`. Staticcheck is enabled through golangci-lint, avoiding a duplicate standalone installation and scan. By default, the reusable workflow resolves and installs `deadcode` and `govulncheck` from this repository's `tools/go.mod`; consumers can override those versions through the corresponding inputs without adding tool directives to their own module.
 
-Some Go 1.27 consumer dependency and type graphs can currently trigger an upstream `x/tools` RTA panic when deadcode analyzes generic methods. This is not a general Go 1.27 failure: minimal generic-method programs continue to pass. Affected consumers can temporarily set `enable-deadcode: false`; this skips only deadcode installation and execution, while `govulncheck` and `staticcheck` remain enabled. The broader Go 1.27 tools compatibility work is tracked in [golang/go#77549](https://github.com/golang/go/issues/77549). Remove the override or set it back to `true` as soon as the affected `x/tools` analysis is fixed.
+`enable-deadcode: false` skips only deadcode installation and execution; use it only as a temporary escape hatch for an upstream analysis regression. `govulncheck` and the golangci-lint suite remain enabled.
 
 ### `go-release.yml` - Go release
 
