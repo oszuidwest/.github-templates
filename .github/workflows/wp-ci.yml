@@ -1,10 +1,19 @@
 ---
-# Strict shape: zero inputs. PHP matrix, plugin-check, and i18n behavior are
-# fixed; the i18n job auto-detects via languages/*.pot.
+# Fixed PHP matrix and i18n behavior. Plugin Check can exclude development-only
+# files and directories; the i18n job auto-detects via languages/*.pot.
 name: WP CI
 
 "on":
   workflow_call:
+    inputs:
+      plugin-check-exclude-files:
+        description: 'Newline-separated files excluded from Plugin Check.'
+        type: string
+        default: ''
+      plugin-check-exclude-directories:
+        description: 'Newline-separated directories excluded from Plugin Check.'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -52,6 +61,8 @@ jobs:
         if: matrix.php == '8.4'
         uses: wordpress/plugin-check-action@v1
         with:
+          exclude-files: ${{ inputs.plugin-check-exclude-files }}
+          exclude-directories: ${{ inputs.plugin-check-exclude-directories }}
           exclude-checks: |
             late_escaping
             plugin_review_phpcs

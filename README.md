@@ -335,7 +335,12 @@ Inputs:
 
 ### `wp-ci.yml` - WordPress plugin lint
 
-Strict shape, no inputs. PHP matrix `["8.3", "8.4"]`, fixed `wp-plugin-check` excludes, optional translations job that auto-runs when `languages/*.pot` exists.
+PHP matrix `["8.3", "8.4"]`, fixed `wp-plugin-check` check exclusions, optional file and directory exclusions for development-only paths, and an optional translations job that auto-runs when `languages/*.pot` exists.
+
+| Input | Type | Default | Description |
+|---|---|---:|---|
+| `plugin-check-exclude-files` | string | `''` | Newline-separated development-only files excluded from Plugin Check. |
+| `plugin-check-exclude-directories` | string | `''` | Newline-separated development-only directories excluded from Plugin Check. |
 
 ```yaml
 name: Lint
@@ -350,11 +355,15 @@ jobs:
       contents: read
       pull-requests: write
     uses: oszuidwest/.github-templates/.github/workflows/wp-ci.yml@v3
+    with:
+      plugin-check-exclude-directories: |
+        scripts
+        tests
 ```
 
 The caller grants `pull-requests: write` to the reusable workflow so Plugin Check can publish or update its pull-request result comment. The called workflow keeps this permission on the `php` job; the separate `translations` job remains read-only.
 
-The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check excludes are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. Plugins that fail other checks fix it in code rather than configuring the workflow.
+The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check check exclusions are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. Use `plugin-check-exclude-files` or `plugin-check-exclude-directories` only for development-only paths that are not shipped with the plugin; production code that fails other checks should be fixed instead.
 
 The `translations` job auto-detects `languages/*.pot`, runs `wp i18n make-pot` against a fresh copy, and fails on missing strings. Slug and domain are derived from the POT filename (e.g. `languages/foo.pot` -> slug+domain `foo`).
 
