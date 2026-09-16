@@ -7,11 +7,11 @@ name: WP CI
   workflow_call:
     inputs:
       plugin-check-exclude-files:
-        description: 'Newline-separated files excluded from Plugin Check.'
+        description: 'Multiline list of files excluded from Plugin Check.'
         type: string
         default: ''
       plugin-check-exclude-directories:
-        description: 'Newline-separated directories excluded from Plugin Check.'
+        description: 'Multiline list of directories excluded from Plugin Check.'
         type: string
         default: ''
 
