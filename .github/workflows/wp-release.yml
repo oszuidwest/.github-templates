@@ -1,7 +1,8 @@
 ---
 # Manual + version-bump release. Reads VERSION from <plugin-slug>.php header,
 # compares against latest git tag, tags + zips + publishes when bumped (or
-# forced). Translations are auto-compiled when languages/*.po exists.
+# forced). Translations are auto-compiled when languages/*.po exists. Extra
+# package exclusions can be listed in a repository-root .distignore file.
 name: WP Release
 
 "on":
@@ -155,12 +156,17 @@ jobs:
           SLUG: ${{ steps.slug.outputs.slug }}
           VERSION: ${{ steps.decide.outputs.version }}
         run: |
+          EXTRA_EXCLUDES=()
+          if [ -f .distignore ]; then
+            EXTRA_EXCLUDES+=(--exclude-from=.distignore)
+          fi
           mkdir -p "release/$SLUG"
           rsync -a ./ "release/$SLUG/" \
             --exclude='/release/' \
             --exclude='/.git/' \
             --exclude='/.github/' \
             --exclude='/.claude/' \
+            --exclude='/.distignore' \
             --exclude='/node_modules/' \
             --exclude='composer.json' \
             --exclude='composer.lock' \
@@ -176,7 +182,12 @@ jobs:
             --exclude='.gitignore' \
             --exclude='CLAUDE.md' \
             --exclude='AGENTS.md' \
-            --exclude='.DS_Store'
+            --exclude='.DS_Store' \
+            "${EXTRA_EXCLUDES[@]}"
+          if [ ! -f "release/$SLUG/$SLUG.php" ]; then
+            echo "::error::.distignore excluded the main plugin file: $SLUG.php"
+            exit 1
+          fi
           ZIP="${SLUG}-${VERSION}.zip"
           (cd release && zip -r "../$ZIP" "$SLUG")
           ls -la "$ZIP"
