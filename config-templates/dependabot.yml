@@ -28,6 +28,17 @@ updates:
 # Uncomment the sections relevant to your project
 # ============================================================================
 
+# PHP / Composer
+# - package-ecosystem: "composer"
+#   directory: "/"
+#   schedule:
+#     interval: "weekly"
+#     day: "monday"
+#   groups:
+#     all-dependencies:
+#       patterns:
+#         - "*"
+
 # Go modules
 # - package-ecosystem: "gomod"
 #   directory: "/"
