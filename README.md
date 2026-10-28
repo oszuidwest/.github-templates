@@ -52,7 +52,7 @@ Shared phpcs ruleset for oszuidwest WordPress plugins. Drop into the plugin root
 </rule>
 ```
 
-The baseline locks down `WordPress-Extra` + `WordPress-Docs` + `PHPCompatibilityWP` against `8.3-8.4` / WP 6.8+. Override this file's `<config name="testVersion"/>` only when a plugin needs a wider PHP range.
+The baseline locks down `WordPress-Extra` + `WordPress-Docs` + `PHPCompatibilityWP` against `8.4-` / WP 6.8+. Override this file's `<config name="testVersion"/>` only when a plugin needs a wider PHP range.
 
 ## Reusable workflows
 
@@ -335,7 +335,7 @@ Inputs:
 
 ### `wp-ci.yml` - WordPress plugin lint
 
-PHP matrix `["8.3", "8.4"]`, fixed `wp-plugin-check` check exclusions, optional path exclusions for development-only files and directories, and an optional translations job that auto-runs when `languages/*.pot` exists.
+PHP matrix `["8.4", "8.5"]`, fixed `wp-plugin-check` check exclusions, optional path exclusions for development-only files and directories, and an optional translations job that auto-runs when `languages/*.pot` exists.
 
 ```yaml
 name: Lint
@@ -365,7 +365,7 @@ Inputs:
 
 The caller grants `pull-requests: write` to the reusable workflow so Plugin Check can publish or update its pull-request result comment. The called workflow keeps this permission on the `php` job; the separate `translations` job remains read-only.
 
-The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check check exclusions are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. The exclude inputs are for development-only paths such as `scripts/` and `tests/`; production code that fails other checks is fixed in code rather than by configuring the workflow.
+The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr) on PHP 8.4 and 8.5. `wordpress/plugin-check-action@v1` runs once, on PHP 8.4, with wp-env pinned to PHP 8.4 via `WP_ENV_PHP_VERSION`. Plugin-check check exclusions are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. The exclude inputs are for development-only paths such as `scripts/` and `tests/`; production code that fails other checks is fixed in code rather than by configuring the workflow.
 
 The `translations` job auto-detects `languages/*.pot`, runs `wp i18n make-pot` against a fresh copy, and fails on missing strings. Slug and domain are derived from the POT filename (e.g. `languages/foo.pot` -> slug+domain `foo`).
 
@@ -428,7 +428,7 @@ Outputs:
 **Packaging behavior:**
 
 - Version regex: `^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`. Pre-release versions (`X.Y.Z-beta.N`, etc.) are auto-marked `prerelease` on the GitHub release.
-- Production build: PHP 8.3 + `composer install --no-dev --optimize-autoloader`.
+- Production build: PHP 8.4 + `composer install --no-dev --optimize-autoloader`.
 - Translations: `msgfmt` runs over `languages/*.po` when any exist. `vendor/` and the compiled `.mo` files are bundled into the zip.
 - Additional excludes: add an optional `.distignore` at the repository root with one rsync exclude pattern per line. Blank lines and lines starting with `#` or `;` are ignored. The workflow fails if a pattern excludes the main `<plugin-slug>.php` file.
 - Built-in rsync exclude list (kept identical across consumers): `release/`, `.git/`, `.github/`, `.claude/`, `.distignore`, `node_modules/`, `composer.json`, `composer.lock`, `package.json`, `package-lock.json`, `biome.json`, `phpcs.xml`, `phpcs.xml.dist`, `phpstan.neon`, `phpstan-bootstrap.php`, `phpstan-bootstrap.stub`, `*.log`, `.gitignore`, `CLAUDE.md`, `AGENTS.md`, `.DS_Store`. `vendor/` and `README.md` are kept in the zip.
