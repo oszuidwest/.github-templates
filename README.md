@@ -365,7 +365,7 @@ Inputs:
 
 The caller grants `pull-requests: write` to the reusable workflow so Plugin Check can publish or update its pull-request result comment. The called workflow keeps this permission on the `php` job; the separate `translations` job remains read-only.
 
-The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr), and `wordpress/plugin-check-action@v1` once on PHP 8.4. Plugin-check check exclusions are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. The exclude inputs are for development-only paths such as `scripts/` and `tests/`; production code that fails other checks is fixed in code rather than by configuring the workflow.
+The `php` job runs `php --syntax-check`, `composer validate`, `composer install`, `phpcs` (checkstyle/cs2pr), `phpstan` (checkstyle/cs2pr) on PHP 8.4 and 8.5. `wordpress/plugin-check-action@v1` runs once, on PHP 8.4, with wp-env pinned to PHP 8.4 via `WP_ENV_PHP_VERSION`. Plugin-check check exclusions are fixed to `late_escaping`, `plugin_review_phpcs`, `file_type`, `plugin_readme`, and `plugin_updater`. The exclude inputs are for development-only paths such as `scripts/` and `tests/`; production code that fails other checks is fixed in code rather than by configuring the workflow.
 
 The `translations` job auto-detects `languages/*.pot`, runs `wp i18n make-pot` against a fresh copy, and fails on missing strings. Slug and domain are derived from the POT filename (e.g. `languages/foo.pot` -> slug+domain `foo`).
 

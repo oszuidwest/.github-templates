@@ -60,6 +60,8 @@ jobs:
       - name: WordPress plugin check
         if: matrix.php == '8.4'
         uses: wordpress/plugin-check-action@v1
+        env:
+          WP_ENV_PHP_VERSION: "8.4"
         with:
           exclude-files: ${{ inputs.plugin-check-exclude-files }}
           exclude-directories: ${{ inputs.plugin-check-exclude-directories }}
