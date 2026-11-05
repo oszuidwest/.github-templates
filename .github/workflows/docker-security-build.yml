@@ -121,8 +121,18 @@ jobs:
           sarif_file: trivy-results.sarif
           category: ${{ inputs.category }}
 
+      - name: Trivy high and critical summary
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: table
+          severity: ${{ inputs.summary-severity }}
+          scanners: ${{ inputs.scanners }}
+          ignore-unfixed: true
+          exit-code: "0"
+
       # A fresh build says nothing about what is already published: that image
-      # keeps its old packages and Go toolchain until the next release.
+      # keeps its old packages and Go toolchain until it is replaced.
       - name: Check published image
         id: published
         if: >-
@@ -161,13 +171,3 @@ jobs:
         with:
           sarif_file: trivy-published.sarif
           category: ${{ inputs.category || 'docker-security' }}-published
-
-      - name: Trivy high and critical summary
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE_REF }}
-          format: table
-          severity: ${{ inputs.summary-severity }}
-          scanners: ${{ inputs.scanners }}
-          ignore-unfixed: true
-          exit-code: "0"

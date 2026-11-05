@@ -73,9 +73,10 @@ security updates that a fresh build would pull in.
 
 Public non-PR runs also scan the image that is already published and upload
 those results under their own category, `<category or docker-security>-published`.
-A fresh build cannot show what a published image still contains. Without such
-an image the scan is skipped with a notice. If the registry cannot be reached
-the scan is skipped with a warning.
+A fresh build cannot show what a published image still contains. If the
+registry answers `manifest unknown` or `denied` the scan is skipped with a
+notice. Other errors from that check skip it with a warning. A failure in the
+scan or upload itself fails the job.
 
 ```yaml
 name: Docker Security
