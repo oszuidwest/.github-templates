@@ -27,6 +27,13 @@ name: Docker Security Build
           uploads overwrite each other. Empty means the codeql-action default.
         type: string
         default: ""
+      published-image:
+        description: >-
+          Published image to scan on non-PR runs. Empty means
+          ghcr.io/<owner>/<repo>:latest. Runs without such an image skip this
+          scan.
+        type: string
+        default: ""
       event-name:
         description: Caller event name, usually github.event_name.
         type: string
@@ -123,3 +130,47 @@ jobs:
           scanners: ${{ inputs.scanners }}
           ignore-unfixed: true
           exit-code: "0"
+
+      # A fresh build says nothing about what is already published: that image
+      # keeps its old packages and Go toolchain until it is replaced.
+      - name: Check published image
+        id: published
+        if: >-
+          inputs.event-name != 'pull_request' &&
+          inputs.repository-private == false
+        env:
+          PUBLISHED_IMAGE: ${{ inputs.published-image }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          IMAGE="${PUBLISHED_IMAGE:-ghcr.io/${REPOSITORY,,}:latest}"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          if ERROR="$(docker manifest inspect "$IMAGE" 2>&1 >/dev/null)"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          elif grep -qE 'manifest unknown|denied' <<< "$ERROR"; then
+            echo "::notice::Skipping published image scan: $IMAGE not found or not public."
+          else
+            echo "::warning::Published image scan did not run for $IMAGE: $ERROR"
+          fi
+
+      - name: Trivy SARIF report for published image
+        if: steps.published.outputs.found == 'true'
+        uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          # Never pick up a local image that happens to have the same name.
+          TRIVY_IMAGE_SRC: remote
+        with:
+          image-ref: ${{ steps.published.outputs.image }}
+          format: sarif
+          output: trivy-published.sarif
+          severity: ${{ inputs.sarif-severity }}
+          scanners: ${{ inputs.scanners }}
+          ignore-unfixed: true
+          exit-code: "0"
+          limit-severities-for-sarif: true
+
+      - name: Upload published image results to GitHub Security
+        if: steps.published.outputs.found == 'true'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-published.sarif
+          category: ${{ inputs.category || 'docker-security' }}-published
