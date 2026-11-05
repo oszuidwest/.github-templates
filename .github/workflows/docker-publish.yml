@@ -120,8 +120,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
           sbom: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max,ignore-error=true
+          # No layer cache on purpose: a cached RUN layer ships the packages of
+          # an earlier build, even when the release itself is new.
+          no-cache: true
           build-args: |
             VERSION=${{ inputs.version }}
             COMMIT=${{ steps.commit.outputs.value }}
