@@ -155,6 +155,9 @@ jobs:
       - name: Trivy SARIF report for published image
         if: steps.published.outputs.found == 'true'
         uses: aquasecurity/trivy-action@v0.36.0
+        env:
+          # Never pick up a local image that happens to have the same name.
+          TRIVY_IMAGE_SRC: remote
         with:
           image-ref: ${{ steps.published.outputs.image }}
           format: sarif
