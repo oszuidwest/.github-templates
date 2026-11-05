@@ -328,8 +328,8 @@ jobs:
 
 The workflow sets up QEMU before Buildx so the default
 `linux/amd64,linux/arm64` platforms build on GitHub-hosted runners.
-Docker layer cache is imported from GitHub Actions cache and exported
-best-effort after the build.
+The image is always built without layer cache: a cached RUN layer would ship
+the packages of an earlier build, even in a new release.
 
 Inputs:
 
