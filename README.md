@@ -71,6 +71,12 @@ The image is always built without layer cache: cached RUN layers freeze
 package installs, so a cached scan keeps reporting stale packages and misses
 security updates that a fresh build would pull in.
 
+Public non-PR runs also scan the image that is already published and upload
+those results under their own category, `<category or docker-security>-published`.
+A fresh build cannot show what a published image still contains. Without such
+an image the scan is skipped with a notice. If the registry cannot be reached
+the scan is skipped with a warning.
+
 ```yaml
 name: Docker Security
 "on":
@@ -99,6 +105,7 @@ Inputs:
 | `image-ref` | string | no | `<owner>/<repo>:security-scan` | Local image ref used by Trivy. |
 | `build-args` | string | no | `''` | Multiline Docker build args. |
 | `category` | string | no | `''` | SARIF upload category. Set a unique value per image when one repo scans multiple images; empty uses the codeql-action default. |
+| `published-image` | string | no | `ghcr.io/<owner>/<repo>:latest` | Published image to scan on public non-PR runs. Set it when the image name differs from the repo. |
 | `event-name` | string | yes | n/a | Pass `${{ github.event_name }}` from the caller. |
 | `repository-private` | boolean | yes | n/a | Pass `${{ github.event.repository.private }}`. |
 | `sarif-severity` | string | no | `CRITICAL,HIGH,MEDIUM` | Severities uploaded to GitHub Security. |
